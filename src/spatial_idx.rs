@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::constants::TILE_SIZE;
+use crate::{GridPosition, constants::TILE_SIZE};
 
 #[derive(Resource, Default, Debug)]
 pub struct SpatialIndex {
@@ -11,48 +11,49 @@ pub struct SpatialIndex {
     map: HashMap<(i32, i32), Entity>,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Tile {
     pub x: i32,
     pub y: i32,
 }
 
 impl SpatialIndex {
-    // Lookup all entities within adjacent cells of our spatial index
-    pub fn get_nearby_from_vec(&self, pos: Vec2) -> Vec<Entity> {
-        let tile = (
-            (pos.x / TILE_SIZE).floor() as i32,
-            (pos.y / TILE_SIZE).floor() as i32,
-        );
+    pub fn get_nearby(&self, origin_x: i32, origin_y: i32) -> Vec<(Entity, GridPosition)> {
         let mut nearby = Vec::new();
+
+        // println!("origin: {} {}", origin_x, origin_y);
         for x in -1..2 {
             for y in -1..2 {
-                if let Some(tile_entity) = self.map.get(&(tile.0 + x, tile.1 + y)) {
-                    // nearby.extend(mines.iter());
-                    nearby.push(*tile_entity);
+                let new_x = origin_x + x;
+                let new_y = origin_y + y;
+
+                // println!("curr nearby: {:?}", nearby);
+                // println!("new_x: {}", new_x);
+                // println!("new_y: {}", new_y);
+
+                // avoid include origin in nearby result
+                if new_x == origin_x && new_y == origin_y {
+                    continue;
+                }
+
+                if let Some(tile_entity) = self.map.get(&(new_x, new_y)) {
+                    // println!("added");
+                    nearby.push((*tile_entity, GridPosition { x: new_x, y: new_y }));
+                    // println!("after add nearby: {:?}", nearby);
                 }
             }
         }
+
+        // println!("final nearby: {:?}", nearby);
         nearby
     }
 
-    pub fn get_nearby(&self, origin_x: i32, origin_y: i32) -> Vec<Entity> {
-        let mut nearby = Vec::new();
-        for x in -1..2 {
-            for y in -1..2 {
-                if let Some(tile_entity) = self.map.get(&(origin_x + x, origin_y + y)) {
-                    // nearby.extend(mines.iter());
-                    nearby.push(*tile_entity);
-                }
-            }
+    pub fn get_entity(&self, x: i32, y: i32) -> Option<Entity> {
+        // println!("get_entity: {} {}", x, y);
+        match self.map.get(&(x, y)) {
+            Some(entity) => Some(entity.clone()),
+            None => None
         }
-
-        println!("get_nearby: {:?}", nearby);
-        nearby
-    }
-
-    pub fn get_entity(&self, x: i32, y: i32) -> Entity {
-        self.map.get(&(x, y)).unwrap().clone()
     }
 }
 

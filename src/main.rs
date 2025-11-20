@@ -1,67 +1,107 @@
 mod constants;
+mod pathfinder;
 mod spatial_idx;
 
-use bevy::{math::ops::abs, prelude::*};
+use std::collections::HashSet;
+
+use bevy::prelude::*;
 use constants::*;
+use pathfinder::*;
 use rand::Rng;
 use spatial_idx::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .insert_resource(Grid::new(GRID_WIDTH, GRID_HEIGHT))
         .init_resource::<SpatialIndex>()
-        .add_systems(Startup, (spawn_grid, setup_camera))
+        .add_systems(Startup, (spawn_grid, setup_camera).chain())
         .add_systems(PostStartup, spawn_agent)
         .add_observer(on_add_tile)
-        .add_observer(update_agent_pathfinding)
+        .add_observer(update_pathfinding_curr_step)
+        .add_observer(pathfinding_finish_path_step)
         .add_observer(update_agent_position)
+        .add_observer(update_agent_color)
         .add_systems(
             Update,
             (
+                on_disocuppied,
                 define_destination_system,
                 check_reach_destination_system,
                 movement_agent,
                 check_agent_pathfinding,
+                mouse_click_world_pos,
             ),
         )
         .run();
 }
 
-/// A grid resource
-#[derive(Resource)]
-struct Grid {
-    width: i32,
-    height: i32,
+fn mouse_click_world_pos(
+    buttons: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    spatial_idx: Res<SpatialIndex>,
+    mut commands: Commands,
+) {
+    // detect right click
+    if buttons.just_pressed(MouseButton::Right) {
+        let window = windows.single().unwrap();
+
+        // get the cursor window position
+        if let Some(screen_pos) = window.cursor_position() {
+            if let Ok((camera, camera_transform)) = camera_query.single() {
+                // convert window position -> world coordinates
+                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, screen_pos) {
+                    let grid_position = Grid::world_to_grid(world_pos);
+                    if let Some(entity) = spatial_idx.get_entity(grid_position.x, grid_position.y) {
+                        commands.entity(entity).insert((
+                            Sprite {
+                                color: Color::linear_rgb(0.20, 0.20, 0.80),
+                                custom_size: Some(Vec2::splat(TILE_SIZE - 1.0)), // little gap
+                                ..default()
+                            },
+                            Occupied,
+                        ));
+                        // println!("\n SET AS OCCUPIED {:?}\n", grid_position);
+                    }
+                }
+            }
+        }
+    }
 }
 
-impl Grid {
-    fn new(width: i32, height: i32) -> Self {
-        Self { width, height }
-    }
+struct Grid;
 
+const GRID_MIDDLE_X: i32 = GRID_WIDTH / 2;
+const GRID_MIDDLE_Y: i32 = GRID_HEIGHT / 2;
+
+impl Grid {
     /// Convert grid coordinates → world coordinates (Vec3)
     fn grid_to_world(x: i32, y: i32) -> Vec3 {
-        let middle_x = GRID_WIDTH / 2;
-        let middle_y = GRID_HEIGHT / 2;
         Vec3::new(
-            (x - middle_x) as f32 * TILE_SIZE,
-            (y - middle_y) as f32 * TILE_SIZE,
+            (x - GRID_MIDDLE_X) as f32 * TILE_SIZE,
+            (y - GRID_MIDDLE_Y) as f32 * TILE_SIZE,
             0.0,
         )
     }
 
-    fn get_random_position(&self) -> GridPosition {
+    fn world_to_grid(pos: Vec2) -> GridPosition {
+        GridPosition {
+            x: ((pos.x / TILE_SIZE) + GRID_MIDDLE_X as f32) as i32,
+            y: ((pos.y / TILE_SIZE) + GRID_MIDDLE_Y as f32) as i32,
+        }
+    }
+
+    fn get_random_position() -> GridPosition {
         let mut rnd = rand::thread_rng();
         GridPosition {
-            x: rnd.gen_range(0..self.width),
-            y: rnd.gen_range(0..self.height),
+            x: rnd.gen_range(0..GRID_WIDTH),
+            y: rnd.gen_range(0..GRID_HEIGHT),
         }
     }
 }
 
 /// Position on the grid
-#[derive(Component, Debug, PartialEq, Eq, Clone)]
+#[derive(Component, Debug, PartialEq, Eq, Clone, Hash)]
 struct GridPosition {
     x: i32,
     y: i32,
@@ -73,10 +113,6 @@ struct Agent {
     pathfinding_entity: Entity,
 }
 
-/// Marker for the Pathfinding Entity
-#[derive(Component)]
-struct AgentPathfinding;
-
 #[derive(Component)]
 struct Walking {
     destination: GridPosition,
@@ -86,14 +122,16 @@ fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
-fn spawn_grid(mut commands: Commands, grid: Res<Grid>) {
-    for y in 0..grid.height {
-        for x in 0..grid.width {
+fn spawn_grid(mut commands: Commands) {
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            // let odd_x = false;
+            // let odd_y = false;
             let odd_x = x % 2 == 0;
             let odd_y = y % 2 == 0;
 
             let mut pos = Grid::grid_to_world(x, y);
-            pos.z = -1.;
+            pos.z = -2.;
 
             if odd_x && odd_y {
                 commands.spawn((
@@ -123,52 +161,83 @@ fn spawn_grid(mut commands: Commands, grid: Res<Grid>) {
     // println!("Grid spawned.");
 }
 
+#[derive(Component, Default)]
+enum AgentPathfinding {
+    #[default]
+    Nothing,
+    Calculating(Pathfinder),
+    Ready(AgentCurrentPath),
+}
+
+#[derive(Debug)]
+struct AgentCurrentPath {
+    path: Vec<GridPosition>,
+    status: AgentCurrentPathStatus,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum AgentCurrentPathStatus {
+    WaitingNextStep((usize, usize)), // (step_idx, retry_count)
+    RunningStep(usize),
+}
+
 fn spawn_agent(mut commands: Commands) {
-    for i in 0..AGENTS_COUNT {
-        let x = GRID_WIDTH / 2;
-        let y = GRID_HEIGHT / 2;
+    for _ in 0..AGENTS_COUNT {
+        let grid_pos = Grid::get_random_position();
+        let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
 
         let pathfinding_entity = commands
             .spawn((
-                AgentPathfinding,
-                GridPosition { x, y },
+                AgentPathfinding::default(),
+                grid_pos.clone(),
                 Sprite {
                     color: Color::linear_rgb(1.0, 1.2, 1.2),
                     custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
                     ..default()
                 },
-                Transform::from_translation(Grid::grid_to_world(x, y)),
+                Transform::from_translation(Vec3 {
+                    x: pos.x,
+                    y: pos.y,
+                    z: -1.,
+                }),
             ))
             .id();
 
         commands.spawn((
             Agent { pathfinding_entity },
-            GridPosition { x, y },
+            grid_pos,
             Sprite {
                 color: Color::linear_rgb(1.0, 0.2, 0.2),
                 custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
                 ..default()
             },
-            Transform::from_translation(Grid::grid_to_world(x, y)),
+            Transform::from_translation(Vec3 {
+                x: pos.x,
+                y: pos.y,
+                z: 1.,
+            }),
         ));
     }
 }
 
-/// Marker for the Pathfinding Entity
 #[derive(Component)]
 struct Occupied;
 
 fn define_destination_system(
     mut query: Query<Entity, (Without<Walking>, With<Agent>)>,
     tile_query: Query<&Tile, Without<Occupied>>,
-    grid: Res<Grid>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
-    for entity in &mut query {
-        let pos = grid.get_random_position();
-        if let Ok(_) = tile_query.get(spatial_idx.get_entity(pos.x, pos.y)) {
-            commands.entity(entity).insert(Walking { destination: pos });
+    for agent_entity in &mut query {
+        let pos = Grid::get_random_position();
+        // println!("define_destination_system: position {:?}", pos);
+        if let Some(entity) = spatial_idx.get_entity(pos.x, pos.y) {
+            if let Ok(_) = tile_query.get(entity) {
+                commands
+                    .entity(agent_entity)
+                    .insert(Walking { destination: pos });
+            }
         }
     }
 }
@@ -178,7 +247,9 @@ fn check_reach_destination_system(
     mut commands: Commands,
 ) {
     for (entity, position, walking) in &query {
+        // println!("check_reach_destination_system");
         if position.eq(&walking.destination) {
+            // println!("destination reached");
             commands.entity(entity).remove::<Walking>();
         }
     }
@@ -190,168 +261,197 @@ struct OccupiedNow {
 }
 
 fn check_agent_pathfinding(
-    query: Query<(&GridPosition, &Walking, &Agent)>,
-    p_query: Query<&GridPosition, With<AgentPathfinding>>,
+    query: Query<(Entity, &GridPosition, &Walking, &Agent)>,
+    mut p_query: Query<&mut AgentPathfinding>,
     tile_query: Query<&Tile, Without<Occupied>>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
     mut occupied_now: Local<OccupiedNow>,
 ) {
-    for (agent_curr_position, walking, agent) in &query {
-        if let Ok(pathfinding_curr_position) = p_query.get(agent.pathfinding_entity) {
-            // println!(
-            //     "check_agent_pathfinding: agent position {:?}",
-            //     agent_position
-            // );
-            // println!(
-            //     "check_agent_pathfinding: pathfinding position {:?}",
-            //     position
-            // );
+    for (agent_entity, agent_curr_position, walking, agent) in &query {
+        if let Ok(mut pathfinding) = p_query.get_mut(agent.pathfinding_entity) {
+            match pathfinding.as_mut() {
+                AgentPathfinding::Nothing => {
+                    *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
+                        agent_curr_position,
+                        &walking.destination,
+                    ));
 
-            if pathfinding_curr_position.eq(&agent_curr_position) {
-                let current_point =
-                    Grid::grid_to_world(agent_curr_position.x, agent_curr_position.y);
-                let destination_point =
-                    Grid::grid_to_world(walking.destination.x, walking.destination.y);
-
-                println!("\ndesired_point: {:?}", walking.destination);
-                let normalized = (destination_point - current_point).normalize();
-                println!("normalized: {}", normalized);
-
-                if normalized.is_nan() {
-                    continue;
+                    commands.trigger(UpdateAgentColor {
+                        entity: agent_entity,
+                        color: Color::linear_rgb(0.2, 1.0, 0.2),
+                    });
                 }
-
-                let mut new_position = GridPosition {
-                    y: pathfinding_curr_position.y,
-                    x: pathfinding_curr_position.x,
-                };
-
-                // Get the next logical path
-                if abs(normalized.x) > abs(normalized.y) {
-                    if normalized.x > 0. {
-                        new_position.x += 1;
-                    } else {
-                        new_position.x -= 1;
+                AgentPathfinding::Calculating(pathfinder) => {
+                    if let Some(path) = pathfinder.get_path_if_finished() {
+                        *pathfinding = AgentPathfinding::Ready(AgentCurrentPath {
+                            path,
+                            status: AgentCurrentPathStatus::WaitingNextStep((0, 0)),
+                        });
+                        commands.trigger(UpdateAgentColor {
+                            entity: agent_entity,
+                            color: Color::linear_rgb(1.0, 0.2, 0.2),
+                        });
+                        continue;
                     }
-                } else {
-                    if normalized.y > 0. {
-                        new_position.y += 1;
-                    } else {
-                        new_position.y -= 1;
-                    }
-                }
-                println!("current pos {:?}", agent_curr_position);
-                println!("new pos {:?}", new_position);
 
-                let mut maybe_next_path: Option<(GridPosition, f32, Entity)> = None;
+                    if let Some(pos) = pathfinder.get_current_node_position() {
+                        let mut unavailable_nearby_positions: HashSet<GridPosition> =
+                            HashSet::new();
 
-                let current_tile_entity = spatial_idx.get_entity(new_position.x, new_position.y);
-
-                // If the next logical path is not available, calculate an alternative
-                if occupied_now.pos.contains(&current_tile_entity)
-                    || tile_query.get(current_tile_entity).is_err()
-                {
-                    for candidate_tile_entity in
-                        spatial_idx.get_nearby(agent_curr_position.x, agent_curr_position.y)
-                    {
-                        // Already tried
-                        if candidate_tile_entity.eq(&current_tile_entity) {
-                            continue;
-                        }
-
-                        // Avoid two Agents try the same tile at the same frame
-                        if occupied_now.pos.contains(&candidate_tile_entity) {
-                            continue;
-                        }
-
-                        println!("current next path {:?}", maybe_next_path);
-                        println!("check candidate {:?}", candidate_tile_entity);
-
-                        if let Ok(free_tile) = tile_query.get(candidate_tile_entity) {
-                            let free_tile_point = Grid::grid_to_world(free_tile.x, free_tile.y);
-
-                            let distance: f32 = free_tile_point.distance(destination_point);
-
-                            if let Some((_next_path_candidate, curr_distance, _entity)) =
-                                maybe_next_path.as_ref()
-                            {
-                                if *curr_distance > distance {
-                                    maybe_next_path = Some((
-                                        GridPosition {
-                                            x: free_tile.x,
-                                            y: free_tile.y,
-                                        },
-                                        distance,
-                                        candidate_tile_entity,
-                                    ));
-                                }
-                            } else {
-                                maybe_next_path = Some((
-                                    GridPosition {
-                                        x: free_tile.x,
-                                        y: free_tile.y,
-                                    },
-                                    distance,
-                                    candidate_tile_entity,
-                                ));
+                        for (entity, grid_position) in spatial_idx.get_nearby(pos.x, pos.y) {
+                            if occupied_now.pos.contains(&entity) {
+                                // println!("occupied_now: {:?}", grid_position);
+                                unavailable_nearby_positions.insert(grid_position.clone());
+                            } else if tile_query.get(entity).is_err() {
+                                // println!("tile occupied: {:?}", grid_position);
+                                unavailable_nearby_positions.insert(grid_position.clone());
                             }
                         }
+
+                        pathfinder.step(unavailable_nearby_positions);
                     }
-
-                    if let Some((new_path, _distance, tile_entity)) = maybe_next_path.as_ref() {
-                        new_position.x = new_path.x;
-                        new_position.y = new_path.y;
-
-                        occupied_now.pos.push(tile_entity.clone());
-
-                        commands.entity(tile_entity.clone()).insert(Occupied);
-
-                        commands
-                            .entity(
-                                spatial_idx
-                                    .get_entity(agent_curr_position.x, agent_curr_position.y),
-                            )
-                            .remove::<Occupied>();
-                    }
-                } else {
-                    maybe_next_path = Some((new_position, 0.0, Entity::PLACEHOLDER));
                 }
+                AgentPathfinding::Ready(current_path) => {
+                    if let AgentCurrentPathStatus::WaitingNextStep((step, retry)) =
+                        &mut current_path.status
+                    {
+                        // println!("curr_path: {:?}", current_path);
 
-                if let Some((new_position, _, _)) = maybe_next_path.take() {
-                    commands.trigger(UpdatePathfinding {
-                        new_position,
-                        entity: agent.pathfinding_entity,
-                    });
+                        if *retry > 10 {
+                            *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
+                                agent_curr_position,
+                                &walking.destination,
+                            ));
+
+                            commands.trigger(UpdateAgentColor {
+                                entity: agent_entity,
+                                color: Color::linear_rgb(0.2, 1.0, 0.2),
+                            });
+
+                            continue;
+                        }
+
+                        if current_path.path.len() == *step {
+                            // println!("reach destination");
+                            *pathfinding = AgentPathfinding::Nothing;
+
+                            // free previous tile
+                            if let Some(entity) =
+                                spatial_idx.get_entity(agent_curr_position.x, agent_curr_position.y)
+                            {
+                                commands.entity(entity).remove::<Occupied>();
+                            }
+
+                            continue;
+                        }
+
+                        let next_position = current_path.path.get(*step).expect("Out of bounds");
+
+                        // println!("next_position: {:?}", next_position);
+
+                        let tile_entity = spatial_idx
+                            .get_entity(next_position.x, next_position.y)
+                            .expect("next position do not exist");
+
+                        // Avoid two Agents try the same tile at the same frame
+                        if occupied_now.pos.contains(&tile_entity) {
+                            *retry += 1;
+
+                            // println!("Next step tile not available {:?}", next_position);
+                            // println!("retry {}", retry);
+
+                            continue;
+                        }
+
+                        if let Ok(_tile) = tile_query.get(tile_entity) {
+                            occupied_now.pos.push(tile_entity.clone());
+
+                            // mark next tile as occupied
+                            commands.entity(tile_entity.clone()).insert(Occupied);
+
+                            // free previous tile
+                            if let Some(entity) =
+                                spatial_idx.get_entity(agent_curr_position.x, agent_curr_position.y)
+                            {
+                                commands.entity(entity).remove::<Occupied>();
+                            }
+
+                            commands.trigger(UpdatePathfindingCurrentStep {
+                                new_position: next_position.clone(),
+                                entity: agent.pathfinding_entity,
+                            });
+                        } else {
+                            *retry += 1;
+                            // println!("Next step tile not available {:?}", next_position);
+                            // println!("retry {}", retry);
+                        }
+                    }
                 }
             }
         }
     }
-
     occupied_now.pos.clear();
 }
 
 #[derive(Event, Debug)]
-struct UpdatePathfinding {
+struct UpdatePathfindingCurrentStep {
     entity: Entity,
     new_position: GridPosition,
 }
 
-fn update_agent_pathfinding(
-    event: On<UpdatePathfinding>,
-    mut p_query: Query<(&mut GridPosition, &mut Transform), With<AgentPathfinding>>,
+fn update_pathfinding_curr_step(
+    event: On<UpdatePathfindingCurrentStep>,
+    mut p_query: Query<(&mut GridPosition, &mut Transform, &mut AgentPathfinding)>,
 ) {
-    if let Ok((mut position, mut transform)) = p_query.get_mut(event.entity) {
-        // println!(
-        //     "update_agent_pathfinding: new position {:?}",
-        //     trigger.new_position
-        // );
-        position.x = event.new_position.x;
-        position.y = event.new_position.y;
+    if let Ok((mut curr_position, mut transform, mut pathfinding)) = p_query.get_mut(event.entity) {
+        match pathfinding.as_mut() {
+            AgentPathfinding::Ready(curr_path) => {
+                if let AgentCurrentPathStatus::WaitingNextStep((step, _)) = curr_path.status {
+                    curr_path.status = AgentCurrentPathStatus::RunningStep(step);
 
-        let new_point = Grid::grid_to_world(event.new_position.x, event.new_position.y);
-        // println!("update_agent_pathfinding: new point {:?}", new_point);
-        transform.translation = new_point;
+                    curr_position.x = event.new_position.x;
+                    curr_position.y = event.new_position.y;
+
+                    let new_point = Grid::grid_to_world(event.new_position.x, event.new_position.y);
+                    transform.translation = new_point;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Event, Debug)]
+struct UpdateAgentColor {
+    entity: Entity,
+    color: Color,
+}
+
+fn update_agent_color(event: On<UpdateAgentColor>, mut p_query: Query<&mut Sprite>) {
+    if let Ok(mut sprite) = p_query.get_mut(event.entity) {
+        sprite.color = event.color;
+    }
+}
+
+#[derive(Event, Debug)]
+struct PathfindingFinishPathStep {
+    entity: Entity,
+}
+
+fn pathfinding_finish_path_step(
+    event: On<PathfindingFinishPathStep>,
+    mut p_query: Query<&mut AgentPathfinding>,
+) {
+    if let Ok(mut pathfinding) = p_query.get_mut(event.entity) {
+        match pathfinding.as_mut() {
+            AgentPathfinding::Ready(curr_path) => {
+                if let AgentCurrentPathStatus::RunningStep(step) = curr_path.status {
+                    curr_path.status = AgentCurrentPathStatus::WaitingNextStep((step + 1, 0));
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -366,8 +466,17 @@ fn update_agent_position(
     mut query: Query<&mut GridPosition, With<Agent>>,
 ) {
     if let Ok(mut position) = query.get_mut(event.entity) {
+        // println!("update_agent_position: {:?}", event.new_position);
         position.x = event.new_position.x;
         position.y = event.new_position.y;
+    }
+}
+
+fn on_disocuppied(mut removed: RemovedComponents<Occupied>, query: Query<&Tile>) {
+    for entity in removed.read() {
+        if let Ok(tile) = query.get(entity) {
+            // println!("\non_disocuppied: removed from tile: {:?}", tile);
+        }
     }
 }
 
@@ -377,13 +486,15 @@ fn movement_agent(
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    for (entity, position, mut transform, agent) in &mut query {
+    for (entity, agent_position, mut transform, agent) in &mut query {
         if let Ok(pathfinding_position) = p_query.get(agent.pathfinding_entity) {
-            if pathfinding_position.ne(position) {
+            if pathfinding_position.ne(agent_position) {
                 let current_point = transform.translation;
-                let previous_point = Grid::grid_to_world(position.x, position.y);
-                let target_point =
+                // let previous_point = Grid::grid_to_world(agent_position.x, agent_position.y);
+                let mut target_point =
                     Grid::grid_to_world(pathfinding_position.x, pathfinding_position.y);
+
+                target_point.z = 1.;
 
                 let to_target = target_point - current_point;
                 let distance = to_target.length();
@@ -400,14 +511,25 @@ fn movement_agent(
                 if step >= distance {
                     transform.translation = target_point;
 
+                    // println!(
+                    //     "will update agent grid position to {:?}",
+                    //     pathfinding_position
+                    // );
+
                     commands.trigger(UpdateAgentGridPosition {
                         entity,
                         new_position: pathfinding_position.clone(),
+                    });
+
+                    commands.trigger(PathfindingFinishPathStep {
+                        entity: agent.pathfinding_entity,
                     });
                 } else {
                     let direction = to_target / distance;
                     transform.translation += direction * step;
                 }
+
+                // println!("agent new translation {}", transform.translation);
             }
         }
     }
