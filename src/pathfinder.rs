@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     GridPosition,
-    constants::{GRID_HEIGHT, GRID_WIDTH},
+    constants::{GRID_HEIGHT, GRID_WIDTH, PATHFINDER_MAX_DEPTH},
 };
 
 #[derive(Clone, Debug)]
@@ -38,7 +38,7 @@ pub struct Pathfinder {
 
 #[derive(Debug, Clone)]
 enum PathfinderStatus {
-    Calculating,
+    Calculating(usize), // current depth
     Finished(Vec<GridPosition>),
 }
 
@@ -61,7 +61,7 @@ impl Pathfinder {
             goal: goal.clone(),
             closed_list: vec![],
             open_list,
-            status: PathfinderStatus::Calculating,
+            status: PathfinderStatus::Calculating(0),
         }
     }
     fn calculate_heuristic(pos1: &GridPosition, pos2: &GridPosition) -> f32 {
@@ -132,14 +132,21 @@ impl Pathfinder {
             }
         };
 
-        // TODO: somehow limit the growing of the path.
-        // Make the Agent walk part of the path instead of keeping 
-        // calculating. He will get closer to the final destination anyway.
-
         // 2. goal found
         if current_node.position == self.goal {
             self.status = PathfinderStatus::Finished(current_node.get_parent_rec());
             return;
+        }
+
+        // Check for max depth
+        if let PathfinderStatus::Calculating(curr_depth) = &mut self.status {
+            if *curr_depth > PATHFINDER_MAX_DEPTH {
+                self.status = PathfinderStatus::Finished(current_node.get_parent_rec());
+                return;
+            }
+
+            *curr_depth += 1;
+            println!("\n curr_depth: {:?}", curr_depth);
         }
 
         // println!(

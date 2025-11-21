@@ -4,7 +4,7 @@ mod spatial_idx;
 
 use std::collections::HashSet;
 
-use bevy::prelude::*;
+use bevy::{color::palettes::css::*, prelude::*};
 use constants::*;
 use pathfinder::*;
 use rand::Rng;
@@ -24,6 +24,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                mark_destination_on_map,
                 on_disocuppied,
                 define_destination_system,
                 check_reach_destination_system,
@@ -242,6 +243,32 @@ fn define_destination_system(
     }
 }
 
+fn mark_destination_on_map(query: Query<&Walking, With<Agent>>, mut gizmos: Gizmos) {
+    for walking in &query {
+        let pos = Grid::grid_to_world(walking.destination.x, walking.destination.y);
+
+        let half_tile: f32 = TILE_SIZE / 2.;
+
+        gizmos.line_2d(
+            Vec2 { x: pos.x - half_tile, y: pos.y - half_tile },
+            Vec2 {
+                x: pos.x + half_tile,
+                y: pos.y + half_tile
+            },
+            RED,
+        );
+
+        gizmos.line_2d(
+            Vec2 { x: pos.x - half_tile, y: pos.y + half_tile },
+            Vec2 {
+                x: pos.x + half_tile,
+                y: pos.y - half_tile
+            },
+            RED,
+        );
+    }
+}
+
 fn check_reach_destination_system(
     query: Query<(Entity, &GridPosition, &Walking), With<Agent>>,
     mut commands: Commands,
@@ -334,7 +361,21 @@ fn check_agent_pathfinding(
 
                         if current_path.path.len() == *step {
                             // println!("reach destination");
-                            *pathfinding = AgentPathfinding::Nothing;
+                            if let Some(last_step_position) = current_path.path.last() {
+                                if last_step_position.eq(&walking.destination) {
+                                    *pathfinding = AgentPathfinding::Nothing;
+                                } else {
+                                    *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
+                                        agent_curr_position,
+                                        &walking.destination,
+                                    ));
+
+                                    commands.trigger(UpdateAgentColor {
+                                        entity: agent_entity,
+                                        color: Color::linear_rgb(0.2, 1.0, 0.2),
+                                    });
+                                }
+                            }
 
                             // free previous tile
                             if let Some(entity) =
