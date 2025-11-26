@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 bevy = "0.17.2"
 rand = "0.8"
+bevy_ecs_ldtk = "0.13.0"
+bevy_ecs_tilemap = "0.17.0"

@@ -1,20 +1,13 @@
-use bevy::{
-    platform::collections::{HashMap, HashSet},
-    prelude::*,
-};
+use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::{GridPosition, constants::TILE_SIZE};
+use bevy_ecs_ldtk::prelude::*;
+use bevy_ecs_tilemap::prelude::*;
+
+use crate::{GridPosition, Occupied};
 
 #[derive(Resource, Default, Debug)]
 pub struct SpatialIndex {
-    // map: HashMap<(i32, i32), HashSet<Entity>>,
     map: HashMap<(i32, i32), Entity>,
-}
-
-#[derive(Component, Debug)]
-pub struct Tile {
-    pub x: i32,
-    pub y: i32,
 }
 
 impl SpatialIndex {
@@ -52,12 +45,28 @@ impl SpatialIndex {
         // println!("get_entity: {} {}", x, y);
         match self.map.get(&(x, y)) {
             Some(entity) => Some(entity.clone()),
-            None => None
+            None => None,
         }
     }
 }
 
-pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<SpatialIndex>) {
-    let tile = query.get(add.entity).unwrap();
-    index.map.entry((tile.x, tile.y)).or_insert(add.entity);
+pub fn on_add_tile(
+    add: On<Add, TilemapId>,
+    query: Query<&GridCoords>,
+    mut index: ResMut<SpatialIndex>,
+) {
+    let coords = query.get(add.entity).unwrap();
+    index.map.entry((coords.x, coords.y)).or_insert(add.entity);
+}
+
+pub fn on_add_tile_enum_tags(
+    add: On<Add, TileEnumTags>,
+    query: Query<&TileEnumTags, (With<GridCoords>, With<TilemapId>)>,
+    mut commands: Commands,
+) {
+    let enum_tags = query.get(add.entity).unwrap();
+
+    if enum_tags.tags.iter().any(|x| x.eq("A")) {
+        commands.entity(add.entity).insert(Occupied);
+    }
 }

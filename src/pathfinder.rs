@@ -146,7 +146,7 @@ impl Pathfinder {
             }
 
             *curr_depth += 1;
-            println!("\n curr_depth: {:?}", curr_depth);
+            // println!("\n curr_depth: {:?}", curr_depth);
         }
 
         // println!(
