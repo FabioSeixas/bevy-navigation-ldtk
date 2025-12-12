@@ -1,29 +1,16 @@
 mod constants;
 mod pathfinder;
 mod spatial_idx;
+mod world;
 
 use std::collections::HashSet;
 
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
 use constants::*;
 use pathfinder::*;
-use rand::Rng;
 use spatial_idx::*;
-
-trait ConvertableToGridPosition {
-    fn to_grid_position(&self) -> GridPosition;
-}
-
-impl ConvertableToGridPosition for GridCoords {
-    fn to_grid_position(&self) -> GridPosition {
-        GridPosition {
-            x: self.x,
-            y: self.y,
-        }
-    }
-}
+use world::*;
 
 fn main() {
     App::new()
@@ -31,7 +18,8 @@ fn main() {
         .add_plugins(LdtkPlugin)
         .insert_resource(LevelSelection::index(0))
         .init_resource::<SpatialIndex>()
-        .add_systems(Startup, setup_camera)
+        .add_systems(PreStartup, (setup_camera, spawn_grid).chain())
+        // .add_systems(Startup, (setup_camera, spawn_grid).chain())
         .add_systems(PostStartup, spawn_agent)
         .add_observer(on_add_tile)
         .add_observer(on_add_tile_enum_tags)
@@ -56,7 +44,7 @@ fn main() {
         .run();
 }
 
-fn debug(query: Query<(&GridCoords, &Transform)>) {
+fn debug(query: Query<(&GridPosition, &Transform)>) {
     for (coords, transform) in query {
         if coords.x == 0 {
             dbg!(coords);
@@ -99,49 +87,6 @@ fn mouse_click_world_pos(
     }
 }
 
-struct Grid;
-
-impl Grid {
-    /// Convert grid coordinates → world coordinates (Vec3)
-    fn grid_to_world(x: i32, y: i32) -> Vec3 {
-        Vec3::new(
-            x as f32 * TILE_SIZE + (TILE_SIZE / 2.),
-            y as f32 * TILE_SIZE + (TILE_SIZE / 2.),
-            0.0,
-        )
-    }
-
-    fn world_to_grid(pos: Vec2) -> GridPosition {
-        GridPosition {
-            x: (pos.x / TILE_SIZE) as i32,
-            y: (pos.y / TILE_SIZE) as i32,
-        }
-    }
-
-    fn get_random_position() -> GridPosition {
-        let mut rnd = rand::thread_rng();
-        GridPosition {
-            x: rnd.gen_range(0..GRID_WIDTH),
-            y: rnd.gen_range(0..GRID_HEIGHT),
-        }
-    }
-
-    fn coords_to_grid_position(c: GridCoords) -> GridPosition {
-        GridPosition { x: c.x, y: c.y }
-    }
-
-    fn grid_position_to_coords(gp: GridPosition) -> GridCoords {
-        GridCoords { x: gp.x, y: gp.y }
-    }
-}
-
-/// Position on the grid
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-struct GridPosition {
-    x: i32,
-    y: i32,
-}
-
 /// Marker for the agent
 #[derive(Component)]
 struct Agent {
@@ -157,7 +102,7 @@ fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            scale: 1.,
+            scale: 0.5,
             ..OrthographicProjection::default_2d()
         }),
         Transform::from_xyz(1280.0 / 4.0, 720.0 / 4.0, 0.0),
@@ -167,6 +112,20 @@ fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
         ldtk_handle: asset_server.load("proj.ldtk").into(),
         ..Default::default()
     });
+}
+
+fn spawn_grid(mut commands: Commands) {
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            let pos = Grid::grid_to_world(x, y);
+
+            commands.spawn((
+                Transform::from_translation(pos),
+                Tile { x, y },
+                GridPosition { x, y },
+            ));
+        }
+    }
 }
 
 #[derive(Component, Default)]
@@ -189,51 +148,66 @@ enum AgentCurrentPathStatus {
     RunningStep(usize),
 }
 
-fn spawn_agent(mut commands: Commands) {
+fn spawn_agent(
+    query: Query<&GridPosition, (With<Tile>, Without<Occupied>)>,
+    spatial_idx: Res<SpatialIndex>,
+    mut commands: Commands,
+) {
     for _ in 0..AGENTS_COUNT {
-        let grid_pos = Grid::get_random_position();
-        let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
+        let mut done = false;
 
-        let pathfinding_entity = commands
-            .spawn((
-                AgentPathfinding::default(),
-                Grid::grid_position_to_coords(grid_pos.clone()),
-                Sprite {
-                    color: Color::linear_rgb(1.0, 1.2, 1.2),
-                    custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                    ..default()
-                },
-                Transform::from_translation(Vec3 {
-                    x: pos.x,
-                    y: pos.y,
-                    z: PATHFINDER_Z_VALUE,
-                }),
-            ))
-            .id();
+        while !done {
+            let grid_pos = Grid::get_random_position();
 
-        commands.spawn((
-            Agent { pathfinding_entity },
-            Grid::grid_position_to_coords(grid_pos),
-            Sprite {
-                color: Color::linear_rgb(1.0, 0.2, 0.2),
-                custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                ..default()
-            },
-            Transform::from_translation(Vec3 {
-                x: pos.x,
-                y: pos.y,
-                z: AGENT_Z_VALUE,
-            }),
-        ));
+            println!("grid pos {:?}", grid_pos);
+
+            let entity = spatial_idx
+                .get_entity(grid_pos.x, grid_pos.y)
+                .expect(format!("No entity on {:?}", grid_pos).as_str());
+
+            if let Ok(_) = query.get(entity) {
+                done = true;
+                let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
+
+                let pathfinding_entity = commands
+                    .spawn((
+                        AgentPathfinding::default(),
+                        grid_pos.clone(),
+                        Sprite {
+                            color: Color::linear_rgb(1.0, 1.2, 1.2),
+                            custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
+                            ..default()
+                        },
+                        Transform::from_translation(Vec3 {
+                            x: pos.x,
+                            y: pos.y,
+                            z: PATHFINDER_Z_VALUE,
+                        }),
+                    ))
+                    .id();
+
+                commands.spawn((
+                    Agent { pathfinding_entity },
+                    grid_pos,
+                    Sprite {
+                        color: Color::linear_rgb(1.0, 0.2, 0.2),
+                        custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(Vec3 {
+                        x: pos.x,
+                        y: pos.y,
+                        z: AGENT_Z_VALUE,
+                    }),
+                ));
+            }
+        }
     }
 }
 
-#[derive(Component)]
-struct Occupied;
-
 fn define_destination_system(
     mut query: Query<Entity, (Without<Walking>, With<Agent>)>,
-    tile_query: Query<&TilemapId, Without<Occupied>>,
+    tile_query: Query<&Tile, Without<Occupied>>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
@@ -257,45 +231,57 @@ fn mark_destination_on_map(query: Query<&Walking, With<Agent>>, mut gizmos: Gizm
         let half_tile: f32 = TILE_SIZE / 2.;
 
         gizmos.line_2d(
-            Vec2 { x: pos.x - half_tile, y: pos.y - half_tile },
+            Vec2 {
+                x: pos.x - half_tile,
+                y: pos.y - half_tile,
+            },
             Vec2 {
                 x: pos.x + half_tile,
-                y: pos.y + half_tile
+                y: pos.y + half_tile,
             },
             RED,
         );
 
         gizmos.line_2d(
-            Vec2 { x: pos.x - half_tile, y: pos.y + half_tile },
+            Vec2 {
+                x: pos.x - half_tile,
+                y: pos.y + half_tile,
+            },
             Vec2 {
                 x: pos.x + half_tile,
-                y: pos.y - half_tile
+                y: pos.y - half_tile,
             },
             RED,
         );
     }
 }
 
-fn mark_occupied_on_map(query: Query<&GridCoords, With<Occupied>>, mut gizmos: Gizmos) {
+fn mark_occupied_on_map(query: Query<&GridPosition, With<Occupied>>, mut gizmos: Gizmos) {
     for coords in &query {
         let pos = Grid::grid_to_world(coords.x, coords.y);
 
         let half_tile: f32 = TILE_SIZE / 2.;
 
         gizmos.line_2d(
-            Vec2 { x: pos.x - half_tile, y: pos.y - half_tile },
+            Vec2 {
+                x: pos.x - half_tile,
+                y: pos.y - half_tile,
+            },
             Vec2 {
                 x: pos.x + half_tile,
-                y: pos.y + half_tile
+                y: pos.y + half_tile,
             },
             BLUE,
         );
 
         gizmos.line_2d(
-            Vec2 { x: pos.x - half_tile, y: pos.y + half_tile },
+            Vec2 {
+                x: pos.x - half_tile,
+                y: pos.y + half_tile,
+            },
             Vec2 {
                 x: pos.x + half_tile,
-                y: pos.y - half_tile
+                y: pos.y - half_tile,
             },
             BLUE,
         );
@@ -303,12 +289,12 @@ fn mark_occupied_on_map(query: Query<&GridCoords, With<Occupied>>, mut gizmos: G
 }
 
 fn check_reach_destination_system(
-    query: Query<(Entity, &GridCoords, &Walking), With<Agent>>,
+    query: Query<(Entity, &GridPosition, &Walking), With<Agent>>,
     mut commands: Commands,
 ) {
     for (entity, position, walking) in &query {
         // println!("check_reach_destination_system");
-        if position.to_grid_position().eq(&walking.destination) {
+        if position.eq(&walking.destination) {
             // println!("destination reached");
             commands.entity(entity).remove::<Walking>();
         }
@@ -321,15 +307,14 @@ struct OccupiedNow {
 }
 
 fn check_agent_pathfinding(
-    query: Query<(Entity, &GridCoords, &Walking, &Agent)>,
+    query: Query<(Entity, &GridPosition, &Walking, &Agent)>,
     mut p_query: Query<&mut AgentPathfinding>,
-    tile_query: Query<&TilemapId, Without<Occupied>>,
+    tile_query: Query<&Tile, Without<Occupied>>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
     mut occupied_now: Local<OccupiedNow>,
 ) {
-    for (agent_entity, agent_grid_coords, walking, agent) in &query {
-        let agent_curr_position = agent_grid_coords.to_grid_position();
+    for (agent_entity, agent_curr_position, walking, agent) in &query {
         if let Ok(mut pathfinding) = p_query.get_mut(agent.pathfinding_entity) {
             match pathfinding.as_mut() {
                 AgentPathfinding::Nothing => {
@@ -477,7 +462,7 @@ struct UpdatePathfindingCurrentStep {
 
 fn update_pathfinding_curr_step(
     event: On<UpdatePathfindingCurrentStep>,
-    mut p_query: Query<(&mut GridCoords, &mut Transform, &mut AgentPathfinding)>,
+    mut p_query: Query<(&mut GridPosition, &mut Transform, &mut AgentPathfinding)>,
 ) {
     if let Ok((mut curr_position, mut transform, mut pathfinding)) = p_query.get_mut(event.entity) {
         match pathfinding.as_mut() {
@@ -491,8 +476,8 @@ fn update_pathfinding_curr_step(
                     let mut new_point =
                         Grid::grid_to_world(event.new_position.x, event.new_position.y);
                     new_point.z = PATHFINDER_Z_VALUE;
-                    println!("new pathfinding position: {:?}", curr_position);
-                    println!("new pathfinding translation: {:?}\n", new_point);
+                    // println!("new pathfinding position: {:?}", curr_position);
+                    // println!("new pathfinding translation: {:?}\n", new_point);
                     transform.translation = new_point;
                 }
             }
@@ -542,7 +527,7 @@ struct UpdateAgentGridPosition {
 
 fn update_agent_position(
     event: On<UpdateAgentGridPosition>,
-    mut query: Query<&mut GridCoords, With<Agent>>,
+    mut query: Query<&mut GridPosition, With<Agent>>,
 ) {
     if let Ok(mut position) = query.get_mut(event.entity) {
         // println!("update_agent_position: {:?}", event.new_position);
@@ -551,7 +536,7 @@ fn update_agent_position(
     }
 }
 
-fn on_disocuppied(mut removed: RemovedComponents<Occupied>, query: Query<&TilemapId>) {
+fn on_disocuppied(mut removed: RemovedComponents<Occupied>, query: Query<&Tile>) {
     for entity in removed.read() {
         if let Ok(tile) = query.get(entity) {
             // println!("\non_disocuppied: removed from tile: {:?}", tile);
@@ -560,8 +545,8 @@ fn on_disocuppied(mut removed: RemovedComponents<Occupied>, query: Query<&Tilema
 }
 
 fn movement_agent(
-    mut query: Query<(Entity, &GridCoords, &mut Transform, &Agent), With<Walking>>,
-    p_query: Query<&GridCoords, With<AgentPathfinding>>,
+    mut query: Query<(Entity, &GridPosition, &mut Transform, &Agent), With<Walking>>,
+    p_query: Query<&GridPosition, With<AgentPathfinding>>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
@@ -597,7 +582,7 @@ fn movement_agent(
 
                     commands.trigger(UpdateAgentGridPosition {
                         entity,
-                        new_position: pathfinding_position.to_grid_position().clone(),
+                        new_position: pathfinding_position.clone(),
                     });
 
                     commands.trigger(PathfindingFinishPathStep {

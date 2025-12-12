@@ -1,13 +1,10 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use bevy_ecs_ldtk::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
-
-use crate::{GridPosition, Occupied};
+use crate::world::GridPosition;
 
 #[derive(Resource, Default, Debug)]
 pub struct SpatialIndex {
-    map: HashMap<(i32, i32), Entity>,
+    pub map: HashMap<(i32, i32), Entity>,
 }
 
 impl SpatialIndex {
@@ -47,26 +44,5 @@ impl SpatialIndex {
             Some(entity) => Some(entity.clone()),
             None => None,
         }
-    }
-}
-
-pub fn on_add_tile(
-    add: On<Add, TilemapId>,
-    query: Query<&GridCoords>,
-    mut index: ResMut<SpatialIndex>,
-) {
-    let coords = query.get(add.entity).unwrap();
-    index.map.entry((coords.x, coords.y)).or_insert(add.entity);
-}
-
-pub fn on_add_tile_enum_tags(
-    add: On<Add, TileEnumTags>,
-    query: Query<&TileEnumTags, (With<GridCoords>, With<TilemapId>)>,
-    mut commands: Commands,
-) {
-    let enum_tags = query.get(add.entity).unwrap();
-
-    if enum_tags.tags.iter().any(|x| x.eq("A")) {
-        commands.entity(add.entity).insert(Occupied);
     }
 }
