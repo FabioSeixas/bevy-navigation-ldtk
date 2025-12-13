@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use bevy_ecs_ldtk::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
 use rand::Rng;
 
 use crate::{
@@ -62,17 +61,12 @@ pub struct GridPosition {
 pub struct Occupied;
 
 pub fn on_add_tile(
-    add: On<Add, TilemapId>,
-    query_third_party_tile: Query<&GridCoords>,
-    query_main_tile: Query<(Entity, &Tile)>,
+    add: On<Add, Tile>,
+    query: Query<&Tile>,
     mut index: ResMut<SpatialIndex>,
 ) {
-    let coords = query_third_party_tile.get(add.entity).unwrap();
-
-    for (entity, tile) in query_main_tile {
-        if tile.x == coords.x && tile.y == coords.y {
-            index.map.entry((coords.x, coords.y)).or_insert(entity);
-        }
+    if let Ok(tile) = query.get(add.entity) {
+        index.map.entry((tile.x, tile.y)).or_insert(add.entity);
     }
 }
 

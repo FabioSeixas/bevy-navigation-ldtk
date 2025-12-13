@@ -12,15 +12,18 @@ use pathfinder::*;
 use spatial_idx::*;
 use world::*;
 
+#[derive(Resource)]
+struct SpawnAgentTimer(Timer);
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(LdtkPlugin)
         .insert_resource(LevelSelection::index(0))
         .init_resource::<SpatialIndex>()
+        .insert_resource(SpawnAgentTimer(Timer::from_seconds(2.0, TimerMode::Once)))
         .add_systems(PreStartup, (setup_camera, spawn_grid).chain())
         // .add_systems(Startup, (setup_camera, spawn_grid).chain())
-        .add_systems(PostStartup, spawn_agent)
         .add_observer(on_add_tile)
         .add_observer(on_add_tile_enum_tags)
         .add_observer(update_pathfinding_curr_step)
@@ -38,6 +41,7 @@ fn main() {
                 movement_agent,
                 check_agent_pathfinding,
                 mouse_click_world_pos,
+                spawn_agent_system,
                 // debug,
             ),
         )
@@ -102,10 +106,10 @@ fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            scale: 0.5,
+            scale: 1.2,
             ..OrthographicProjection::default_2d()
         }),
-        Transform::from_xyz(1280.0 / 4.0, 720.0 / 4.0, 0.0),
+        Transform::from_xyz(512.0, 512.0, 0.0),
     ));
 
     commands.spawn(LdtkWorldBundle {
@@ -148,59 +152,66 @@ enum AgentCurrentPathStatus {
     RunningStep(usize),
 }
 
-fn spawn_agent(
+fn spawn_agent_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: Option<ResMut<SpawnAgentTimer>>,
     query: Query<&GridPosition, (With<Tile>, Without<Occupied>)>,
     spatial_idx: Res<SpatialIndex>,
-    mut commands: Commands,
 ) {
-    for _ in 0..AGENTS_COUNT {
-        let mut done = false;
+    if let Some(mut timer) = timer {
+        if timer.0.tick(time.delta()).just_finished() {
+            for _ in 0..AGENTS_COUNT {
+                let mut done = false;
 
-        while !done {
-            let grid_pos = Grid::get_random_position();
+                while !done {
+                    let grid_pos = Grid::get_random_position();
 
-            println!("grid pos {:?}", grid_pos);
+                    println!("grid pos {:?}", grid_pos);
 
-            let entity = spatial_idx
-                .get_entity(grid_pos.x, grid_pos.y)
-                .expect(format!("No entity on {:?}", grid_pos).as_str());
+                    let entity = spatial_idx
+                        .get_entity(grid_pos.x, grid_pos.y)
+                        .expect(format!("No entity on {:?}", grid_pos).as_str());
 
-            if let Ok(_) = query.get(entity) {
-                done = true;
-                let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
+                    if let Ok(_) = query.get(entity) {
+                        done = true;
+                        let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
 
-                let pathfinding_entity = commands
-                    .spawn((
-                        AgentPathfinding::default(),
-                        grid_pos.clone(),
-                        Sprite {
-                            color: Color::linear_rgb(1.0, 1.2, 1.2),
-                            custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3 {
-                            x: pos.x,
-                            y: pos.y,
-                            z: PATHFINDER_Z_VALUE,
-                        }),
-                    ))
-                    .id();
+                        let pathfinding_entity = commands
+                            .spawn((
+                                AgentPathfinding::default(),
+                                grid_pos.clone(),
+                                Sprite {
+                                    color: Color::linear_rgb(1.0, 1.2, 1.2),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
+                                    ..default()
+                                },
+                                Transform::from_translation(Vec3 {
+                                    x: pos.x,
+                                    y: pos.y,
+                                    z: PATHFINDER_Z_VALUE,
+                                }),
+                            ))
+                            .id();
 
-                commands.spawn((
-                    Agent { pathfinding_entity },
-                    grid_pos,
-                    Sprite {
-                        color: Color::linear_rgb(1.0, 0.2, 0.2),
-                        custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(Vec3 {
-                        x: pos.x,
-                        y: pos.y,
-                        z: AGENT_Z_VALUE,
-                    }),
-                ));
+                        commands.spawn((
+                            Agent { pathfinding_entity },
+                            grid_pos,
+                            Sprite {
+                                color: Color::linear_rgb(1.0, 0.2, 0.2),
+                                custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(Vec3 {
+                                x: pos.x,
+                                y: pos.y,
+                                z: AGENT_Z_VALUE,
+                            }),
+                        ));
+                    }
+                }
             }
+            commands.remove_resource::<SpawnAgentTimer>();
         }
     }
 }
