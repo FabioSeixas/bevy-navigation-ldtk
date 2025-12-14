@@ -29,7 +29,7 @@ fn main() {
         .add_observer(update_pathfinding_curr_step)
         .add_observer(pathfinding_finish_path_step)
         .add_observer(update_agent_position)
-        .add_observer(update_agent_color)
+        .add_observer(on_update_agent_color)
         .add_systems(
             Update,
             (
@@ -150,7 +150,6 @@ fn spawn_grid(mut commands: Commands) {
 }
 
 #[derive(Component, Default)]
-
 enum AgentPathfinding {
     #[default]
     Nothing,
@@ -160,16 +159,34 @@ enum AgentPathfinding {
     Ready(AgentCurrentPath),
 }
 
-#[derive(Debug)]
+impl AgentPathfinding {
+    pub fn start_path_calculation(
+        &mut self,
+        agent_curr_position: &GridPosition,
+        destination: &GridPosition,
+    ) {
+        *self = AgentPathfinding::Calculating(Pathfinder::new(agent_curr_position, destination));
+    }
 
+    pub fn start_walking_path(&mut self, path: Vec<GridPosition>) {
+        *self = AgentPathfinding::Ready(AgentCurrentPath {
+            path,
+            status: AgentCurrentPathStatus::WaitingNextStep((0, 0)),
+        });
+    }
+
+    pub fn reset(&mut self) {
+        *self = AgentPathfinding::Nothing;
+    }
+}
+
+#[derive(Debug)]
 struct AgentCurrentPath {
     path: Vec<GridPosition>,
-
     status: AgentCurrentPathStatus,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-
 enum AgentCurrentPathStatus {
     WaitingNextStep((usize, usize)), // (step_idx, retry_count)
 
@@ -398,74 +415,47 @@ fn check_agent_pathfinding(
         if let Ok(mut pathfinding) = p_query.get_mut(agent.pathfinding_entity) {
             match pathfinding.as_mut() {
                 AgentPathfinding::Nothing => {
-                    *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
-                        &agent_curr_position,
-                        &walking.destination,
-                    ));
-
-                    commands.trigger(UpdateAgentColor {
-                        entity: agent_entity,
-                        color: Color::linear_rgb(0.2, 1.0, 0.2),
-                    });
+                    pathfinding.start_path_calculation(agent_curr_position, &walking.destination);
+                    UpdateAgentColor::calculating_path(&mut commands, agent_entity);
                 }
                 AgentPathfinding::Calculating(pathfinder) => {
                     if let Some(path) = pathfinder.get_path_if_finished() {
-                        *pathfinding = AgentPathfinding::Ready(AgentCurrentPath {
-                            path,
-                            status: AgentCurrentPathStatus::WaitingNextStep((0, 0)),
-                        });
-                        commands.trigger(UpdateAgentColor {
-                            entity: agent_entity,
-                            color: Color::linear_rgb(1.0, 0.2, 0.2),
-                        });
-                        continue;
+                        pathfinding.start_walking_path(path);
+                        UpdateAgentColor::walking_path(&mut commands, agent_entity);
+                    } else {
+                        pathfinder.step(&spatial_idx, &dynamic_occupied_tiles);
                     }
-
-                    pathfinder.step(&spatial_idx, &dynamic_occupied_tiles);
                 }
                 AgentPathfinding::Ready(current_path) => {
                     if let AgentCurrentPathStatus::WaitingNextStep((step, retry)) =
                         &mut current_path.status
                     {
-                        // println!("curr_path: {:?}", current_path);
-
                         if *retry > 10 {
-                            *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
-                                &agent_curr_position,
-                                &walking.destination,
-                            ));
+                            pathfinding
+                                .start_path_calculation(agent_curr_position, &walking.destination);
 
-                            commands.trigger(UpdateAgentColor {
-                                entity: agent_entity,
-                                color: Color::linear_rgb(0.2, 1.0, 0.2),
-                            });
+                            UpdateAgentColor::calculating_path(&mut commands, agent_entity);
 
                             continue;
                         }
 
-                        if current_path.path.len() == *step {
-                            // println!("reach destination");
+                        let is_last_step = current_path.path.len() == *step;
+
+                        if is_last_step {
                             if let Some(last_step_position) = current_path.path.last() {
-                                if last_step_position.eq(&walking.destination) {
-                                    *pathfinding = AgentPathfinding::Nothing;
+                                let reach_final_destination =
+                                    last_step_position.eq(&walking.destination);
+
+                                if reach_final_destination {
+                                    pathfinding.reset();
                                 } else {
-                                    *pathfinding = AgentPathfinding::Calculating(Pathfinder::new(
-                                        &agent_curr_position,
+                                    pathfinding.start_path_calculation(
+                                        agent_curr_position,
                                         &walking.destination,
-                                    ));
+                                    );
 
-                                    commands.trigger(UpdateAgentColor {
-                                        entity: agent_entity,
-                                        color: Color::linear_rgb(0.2, 1.0, 0.2),
-                                    });
+                                    UpdateAgentColor::calculating_path(&mut commands, agent_entity);
                                 }
-                            }
-
-                            // free previous tile
-                            if let Some(entity) =
-                                spatial_idx.get_entity(agent_curr_position.x, agent_curr_position.y)
-                            {
-                                commands.entity(entity).remove::<Occupied>();
                             }
 
                             continue;
@@ -557,7 +547,23 @@ struct UpdateAgentColor {
     color: Color,
 }
 
-fn update_agent_color(event: On<UpdateAgentColor>, mut p_query: Query<&mut Sprite>) {
+impl UpdateAgentColor {
+    pub fn calculating_path(commands: &mut Commands, agent_entity: Entity) {
+        commands.trigger(UpdateAgentColor {
+            entity: agent_entity,
+            color: Color::linear_rgb(0.2, 1.0, 0.2),
+        });
+    }
+
+    pub fn walking_path(commands: &mut Commands, agent_entity: Entity) {
+        commands.trigger(UpdateAgentColor {
+            entity: agent_entity,
+            color: Color::linear_rgb(1.0, 0.2, 0.2),
+        });
+    }
+}
+
+fn on_update_agent_color(event: On<UpdateAgentColor>, mut p_query: Query<&mut Sprite>) {
     if let Ok(mut sprite) = p_query.get_mut(event.entity) {
         sprite.color = event.color;
     }
