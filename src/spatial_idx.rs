@@ -1,14 +1,20 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::world::GridPosition;
+use crate::world::{GridPosition, TileType};
+
+#[derive(Clone, Copy, Debug)]
+pub struct TileData {
+    pub entity: Entity,
+    pub tile_type: TileType,
+}
 
 #[derive(Resource, Default, Debug)]
 pub struct SpatialIndex {
-    pub map: HashMap<(i32, i32), Entity>,
+    pub map: HashMap<(i32, i32), TileData>,
 }
 
 impl SpatialIndex {
-    pub fn get_nearby(&self, origin_x: i32, origin_y: i32) -> Vec<(Entity, GridPosition)> {
+    pub fn get_nearby(&self, origin_x: i32, origin_y: i32) -> Vec<(TileData, GridPosition)> {
         let mut nearby = Vec::new();
 
         // println!("origin: {} {}", origin_x, origin_y);
@@ -41,7 +47,7 @@ impl SpatialIndex {
     pub fn get_entity(&self, x: i32, y: i32) -> Option<Entity> {
         // println!("get_entity: {} {}", x, y);
         match self.map.get(&(x, y)) {
-            Some(entity) => Some(entity.clone()),
+            Some(data) => Some(data.entity),
             None => None,
         }
     }

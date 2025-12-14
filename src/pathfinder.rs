@@ -3,7 +3,8 @@ use std::collections::{HashSet, VecDeque};
 use bevy::prelude::*;
 
 use crate::{
-    GridPosition,
+    spatial_idx::SpatialIndex,
+    world::{GridPosition, TileType},
     constants::{GRID_HEIGHT, GRID_WIDTH, PATHFINDER_MAX_DEPTH},
 };
 
@@ -112,13 +113,11 @@ impl Pathfinder {
         }
     }
 
-    // TODO: could receive weights for each grid position
-    pub fn step(&mut self, nearby_unavailable_positions: HashSet<GridPosition>) {
-        // println!("\nstarting step");
-        // println!(
-        //     "nearby_unavailable_positions: {:?}",
-        //     nearby_unavailable_positions
-        // );
+    pub fn step(
+        &mut self,
+        spatial_index: &SpatialIndex,
+        dynamic_occupied_tiles: &HashSet<GridPosition>,
+    ) {
         if let PathfinderStatus::Finished(_) = self.status {
             return;
         }
@@ -146,13 +145,7 @@ impl Pathfinder {
             }
 
             *curr_depth += 1;
-            // println!("\n curr_depth: {:?}", curr_depth);
         }
-
-        // println!(
-        //     "\n total path from current_node: {:?}",
-        //     current_node.get_parent_rec()
-        // );
 
         // 3. expand node
         let current_idx = self.closed_list.len();
@@ -161,8 +154,39 @@ impl Pathfinder {
 
         // 4. neighbors
         for pos in Pathfinder::get_nearby(&current.position) {
-            if nearby_unavailable_positions.contains(&pos) {
-                // println!("jump nearby_unavailable_position: {:?}", pos);
+            // Dynamic Check
+            if dynamic_occupied_tiles.contains(&pos) {
+                continue;
+            }
+
+            // Static Check
+            let current_tile_data = spatial_index
+                .map
+                .get(&(current.position.x, current.position.y))
+                .unwrap();
+            let neighbor_tile_data = spatial_index.map.get(&(pos.x, pos.y)).unwrap();
+
+            let can_move = match (current_tile_data.tile_type, neighbor_tile_data.tile_type) {
+                // Cant move into a wall
+                (_, TileType::Wall) => false,
+                // Can move from door to door
+                (TileType::Door, TileType::Door) => true,
+                // From inside can move to a door
+                (TileType::Inside, TileType::Door) => true,
+                // From a door can move inside
+                (TileType::Door, TileType::Inside) => true,
+                // From outside can move to a door
+                (TileType::Outside, TileType::Door) => true,
+                // From a door can move outside
+                (TileType::Door, TileType::Outside) => true,
+                // From inside can move to another inside tile
+                (TileType::Inside, TileType::Inside) => true,
+                // From outside can move to another outside tile
+                (TileType::Outside, TileType::Outside) => true,
+                _ => false,
+            };
+
+            if !can_move {
                 continue;
             }
 

@@ -5,8 +5,22 @@ use rand::Rng;
 
 use crate::{
     constants::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE},
-    spatial_idx::SpatialIndex,
+    spatial_idx::{SpatialIndex, TileData},
 };
+
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub enum TileType {
+    Outside,
+    Inside,
+    Wall,
+    Door,
+}
+
+impl Default for TileType {
+    fn default() -> Self {
+        TileType::Wall
+    }
+}
 
 #[derive(Component, Debug)]
 pub struct Tile {
@@ -66,25 +80,36 @@ pub fn on_add_tile(
     mut index: ResMut<SpatialIndex>,
 ) {
     if let Ok(tile) = query.get(add.entity) {
-        index.map.entry((tile.x, tile.y)).or_insert(add.entity);
+        index.map.entry((tile.x, tile.y)).or_insert(TileData {
+            entity: add.entity,
+            tile_type: TileType::default(),
+        });
     }
 }
 
 pub fn on_add_tile_enum_tags(
     add: On<Add, TileEnumTags>,
     query_third_party_tile: Query<(&TileEnumTags, &GridCoords)>,
-    query_main_tile: Query<(Entity, &Tile)>,
-    mut commands: Commands,
+    mut index: ResMut<SpatialIndex>,
 ) {
     let (enum_tags, coords) = query_third_party_tile.get(add.entity).unwrap();
 
     dbg!(enum_tags);
-    if enum_tags.tags.iter().any(|x| x.eq("A")) {
-        for (entity, tile) in query_main_tile {
-            if tile.x == coords.x && tile.y == coords.y {
-                println!("add Occupied");
-                commands.entity(entity).insert(Occupied);
-            }
-        }
+
+    let tile_type = if enum_tags.tags.iter().any(|t| t == "Wall") {
+        TileType::Wall
+    } else if enum_tags.tags.iter().any(|t| t == "Door") {
+        TileType::Door
+    } else if enum_tags.tags.iter().any(|t| t == "Inside") {
+        TileType::Inside
+    } else if enum_tags.tags.iter().any(|t| t == "Outside") {
+        TileType::Outside
+    } else {
+        // Don't change type if no matching tag found
+        return;
+    };
+
+    if let Some(tile_data) = index.map.get_mut(&(coords.x, coords.y)) {
+        tile_data.tile_type = tile_type;
     }
 }
