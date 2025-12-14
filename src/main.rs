@@ -254,24 +254,35 @@ fn spawn_agent_system(
 
 fn define_destination_system(
     mut query: Query<Entity, (Without<Walking>, With<Agent>)>,
-
     tile_query: Query<&Tile, Without<Occupied>>,
-
     spatial_idx: Res<SpatialIndex>,
-
     mut commands: Commands,
 ) {
     for agent_entity in &mut query {
-        let pos = Grid::get_random_position();
+        let mut chosen_destination_pos: Option<GridPosition> = None;
 
-        // println!("define_destination_system: position {:?}", pos);
+        while chosen_destination_pos.is_none() {
+            let pos = Grid::get_random_position();
 
-        if let Some(entity) = spatial_idx.get_entity(pos.x, pos.y) {
-            if let Ok(_) = tile_query.get(entity) {
-                commands
-                    .entity(agent_entity)
-                    .insert(Walking { destination: pos });
+            if let Some(tile_data) = spatial_idx.map.get(&(pos.x, pos.y)) {
+                // Check if it's not a Wall or Door
+
+                if tile_data.tile_type != TileType::Wall && tile_data.tile_type != TileType::Door {
+                    // And also check if it's not dynamically occupied
+
+                    if let Ok(_) = tile_query.get(tile_data.entity) {
+                        chosen_destination_pos = Some(pos);
+                    }
+                }
             }
+        }
+
+        // Once a valid destination is found
+
+        if let Some(destination_pos) = chosen_destination_pos {
+            commands.entity(agent_entity).insert(Walking {
+                destination: destination_pos,
+            });
         }
     }
 }
