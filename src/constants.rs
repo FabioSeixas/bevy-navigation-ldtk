@@ -2,6 +2,7 @@
 pub const GRID_WIDTH: i32 = 64;
 pub const GRID_HEIGHT: i32 = 64;
 
+pub const BUILDING_TILES_Z_VALUE: f32 = 20.;
 pub const AGENT_Z_VALUE: f32 = 20.;
 pub const PATHFINDER_Z_VALUE: f32 = 10.;
 

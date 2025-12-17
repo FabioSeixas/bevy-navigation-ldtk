@@ -44,6 +44,14 @@ impl SpatialIndex {
         nearby
     }
 
+    pub fn get_entity_data(&self, x: i32, y: i32) -> Option<TileData> {
+        // println!("get_entity: {} {}", x, y);
+        match self.map.get(&(x, y)) {
+            Some(data) => Some(*data),
+            None => None,
+        }
+    }
+
     pub fn get_entity(&self, x: i32, y: i32) -> Option<Entity> {
         // println!("get_entity: {} {}", x, y);
         match self.map.get(&(x, y)) {

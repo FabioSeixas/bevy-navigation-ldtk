@@ -1,6 +1,7 @@
 mod agent;
 mod constants;
 mod pathfinder;
+mod roof;
 mod spatial_idx;
 mod world;
 
@@ -8,6 +9,7 @@ use agent::{Agent, AgentPlugin, Walking};
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use constants::*;
+use roof::RoofPlugin;
 use spatial_idx::*;
 use world::*;
 
@@ -16,11 +18,11 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
+        .add_plugins(RoofPlugin)
         .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
         .init_resource::<SpatialIndex>()
         .add_systems(PreStartup, (setup_camera, spawn_grid).chain())
-        // .add_systems(Startup, (setup_camera, spawn_grid).chain())
         .add_observer(on_add_tile)
         .add_observer(on_add_tile_enum_tags)
         .add_systems(
@@ -31,11 +33,20 @@ fn main() {
                 on_disocuppied,
                 mouse_click_world_pos,
                 toggle_gizmos,
-                // debug,
             ),
         )
         .run();
 }
+
+// TilemapBundle
+// fn debug(query: Query<(Entity, &Transform, &TilemapGridSize)>) {
+//     for (entity, transform, grid_size) in query {
+//             dbg!(entity);
+//             dbg!(grid_size);
+//             dbg!(transform.translation);
+//             println!("-------------------");
+//     }
+// }
 
 fn toggle_gizmos(mut config_store: ResMut<GizmoConfigStore>, input: Res<ButtonInput<KeyCode>>) {
     if input.just_pressed(KeyCode::KeyG) {
@@ -44,15 +55,15 @@ fn toggle_gizmos(mut config_store: ResMut<GizmoConfigStore>, input: Res<ButtonIn
     }
 }
 
-fn debug(query: Query<(&GridPosition, &Transform)>) {
-    for (coords, transform) in query {
-        if coords.x == 0 {
-            dbg!(coords);
-
-            dbg!(transform.translation);
-        }
-    }
-}
+// fn debug(query: Query<(&GridPosition, &Transform)>) {
+//     for (coords, transform) in query {
+//         if coords.x == 0 {
+//             dbg!(coords);
+//
+//             dbg!(transform.translation);
+//         }
+//     }
+// }
 
 fn mouse_click_world_pos(
     buttons: Res<ButtonInput<MouseButton>>,

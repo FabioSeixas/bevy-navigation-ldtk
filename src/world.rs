@@ -5,6 +5,7 @@ use rand::Rng;
 
 use crate::{
     constants::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE},
+    roof::Roof,
     spatial_idx::{SpatialIndex, TileData},
 };
 
@@ -91,6 +92,7 @@ pub fn on_add_tile_enum_tags(
     add: On<Add, TileEnumTags>,
     query_third_party_tile: Query<(&TileEnumTags, &GridCoords)>,
     mut index: ResMut<SpatialIndex>,
+    mut commands: Commands,
 ) {
     let (enum_tags, coords) = query_third_party_tile.get(add.entity).unwrap();
 
@@ -99,6 +101,7 @@ pub fn on_add_tile_enum_tags(
     } else if enum_tags.tags.iter().any(|t| t == "Door") {
         TileType::Door
     } else if enum_tags.tags.iter().any(|t| t == "Inside") {
+        commands.entity(add.entity).insert(Roof);
         TileType::Inside
     } else if enum_tags.tags.iter().any(|t| t == "Outside") {
         TileType::Outside
