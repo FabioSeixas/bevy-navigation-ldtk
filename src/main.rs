@@ -5,7 +5,7 @@ mod world;
 
 use std::collections::HashSet;
 
-use bevy::{color::palettes::css::*, gizmos::config::GizmoConfig, prelude::*};
+use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use constants::*;
 use pathfinder::*;
