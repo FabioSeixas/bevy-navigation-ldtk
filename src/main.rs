@@ -5,7 +5,7 @@ mod world;
 
 use std::collections::HashSet;
 
-use bevy::{color::palettes::css::*, prelude::*};
+use bevy::{color::palettes::css::*, gizmos::config::GizmoConfig, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use constants::*;
 use pathfinder::*;
@@ -19,6 +19,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(LdtkPlugin)
+        .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
         .init_resource::<SpatialIndex>()
         .insert_resource(SpawnAgentTimer(Timer::from_seconds(2.0, TimerMode::Once)))
@@ -42,10 +43,18 @@ fn main() {
                 check_agent_pathfinding,
                 mouse_click_world_pos,
                 spawn_agent_system,
+                toggle_gizmos,
                 // debug,
             ),
         )
         .run();
+}
+
+fn toggle_gizmos(mut config_store: ResMut<GizmoConfigStore>, input: Res<ButtonInput<KeyCode>>) {
+    if input.just_pressed(KeyCode::KeyG) {
+        let (config, _) = config_store.config_mut::<DefaultGizmoConfigGroup>();
+        config.enabled = !config.enabled;
+    }
 }
 
 fn debug(query: Query<(&GridPosition, &Transform)>) {
