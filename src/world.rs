@@ -94,8 +94,6 @@ pub fn on_add_tile_enum_tags(
 ) {
     let (enum_tags, coords) = query_third_party_tile.get(add.entity).unwrap();
 
-    dbg!(enum_tags);
-
     let tile_type = if enum_tags.tags.iter().any(|t| t == "Wall") {
         TileType::Wall
     } else if enum_tags.tags.iter().any(|t| t == "Door") {
