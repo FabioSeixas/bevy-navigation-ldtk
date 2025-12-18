@@ -8,6 +8,7 @@ mod world;
 use agent::{Agent, AgentPlugin, Walking};
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
+use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use constants::*;
 use roof::RoofPlugin;
 use spatial_idx::*;
@@ -33,20 +34,22 @@ fn main() {
                 on_disocuppied,
                 mouse_click_world_pos,
                 toggle_gizmos,
+                // debug
             ),
         )
         .run();
 }
 
 // TilemapBundle
-// fn debug(query: Query<(Entity, &Transform, &TilemapGridSize)>) {
-//     for (entity, transform, grid_size) in query {
-//             dbg!(entity);
-//             dbg!(grid_size);
-//             dbg!(transform.translation);
-//             println!("-------------------");
-//     }
-// }
+fn debug(query: Query<(Entity, &TilePos, &Transform, &TileColor)>) {
+    for (entity, tile_pos, transform, tile_color) in query {
+            dbg!(entity);
+            dbg!(tile_color);
+            dbg!(tile_pos);
+            dbg!(transform.translation);
+            println!("-------------------");
+    }
+}
 
 fn toggle_gizmos(mut config_store: ResMut<GizmoConfigStore>, input: Res<ButtonInput<KeyCode>>) {
     if input.just_pressed(KeyCode::KeyG) {

@@ -6,6 +6,7 @@ use crate::world::{GridPosition, TileType};
 pub struct TileData {
     pub entity: Entity,
     pub tile_type: TileType,
+    pub tilemap_entity: Option<Entity>,
 }
 
 #[derive(Resource, Default, Debug)]

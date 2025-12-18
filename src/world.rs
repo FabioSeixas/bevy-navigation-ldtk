@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_ecs_tilemap::map::TilemapId;
 
 use bevy_ecs_ldtk::prelude::*;
 use rand::Rng;
@@ -80,17 +81,18 @@ pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<Sp
         index.map.entry((tile.x, tile.y)).or_insert(TileData {
             entity: add.entity,
             tile_type: TileType::default(),
+            tilemap_entity: None,
         });
     }
 }
 
 pub fn on_add_tile_enum_tags(
     add: On<Add, TileEnumTags>,
-    query_third_party_tile: Query<(&TileEnumTags, &GridCoords)>,
+    query_third_party_tile: Query<(&TileEnumTags, &GridCoords, &TilemapId)>,
     mut index: ResMut<SpatialIndex>,
     mut commands: Commands,
 ) {
-    let (enum_tags, coords) = query_third_party_tile.get(add.entity).unwrap();
+    let (enum_tags, coords, tilemap_id) = query_third_party_tile.get(add.entity).unwrap();
 
     let mut add_roof = false;
 
@@ -111,6 +113,7 @@ pub fn on_add_tile_enum_tags(
 
     if let Some(tile_data) = index.map.get_mut(&(coords.x, coords.y)) {
         tile_data.tile_type = tile_type;
+        tile_data.tilemap_entity = Some(tilemap_id.0);
 
         if add_roof {
             commands.entity(tile_data.entity).insert(Roof);
