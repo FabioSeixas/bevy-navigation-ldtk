@@ -28,7 +28,7 @@ fn roof_opacity_system(
     spatial_idx: Res<SpatialIndex>,
 ) {
     const RADIUS: i32 = 4;
-    const TRANSPARENT_ALPHA: f32 = 0.6;
+    const TRANSPARENT_ALPHA: f32 = 0.1;
     const OPAQUE_ALPHA: f32 = 1.0;
 
     // 1. Find all unique positions around "inside" agents that should be transparent.
