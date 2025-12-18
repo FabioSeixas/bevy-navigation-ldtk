@@ -75,11 +75,7 @@ pub struct GridPosition {
 #[derive(Component)]
 pub struct Occupied;
 
-pub fn on_add_tile(
-    add: On<Add, Tile>,
-    query: Query<&Tile>,
-    mut index: ResMut<SpatialIndex>,
-) {
+pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<SpatialIndex>) {
     if let Ok(tile) = query.get(add.entity) {
         index.map.entry((tile.x, tile.y)).or_insert(TileData {
             entity: add.entity,
@@ -96,12 +92,15 @@ pub fn on_add_tile_enum_tags(
 ) {
     let (enum_tags, coords) = query_third_party_tile.get(add.entity).unwrap();
 
+    let mut add_roof = false;
+
     let tile_type = if enum_tags.tags.iter().any(|t| t == "Wall") {
         TileType::Wall
     } else if enum_tags.tags.iter().any(|t| t == "Door") {
         TileType::Door
     } else if enum_tags.tags.iter().any(|t| t == "Inside") {
-        commands.entity(add.entity).insert(Roof);
+        add_roof = true;
+
         TileType::Inside
     } else if enum_tags.tags.iter().any(|t| t == "Outside") {
         TileType::Outside
@@ -112,5 +111,9 @@ pub fn on_add_tile_enum_tags(
 
     if let Some(tile_data) = index.map.get_mut(&(coords.x, coords.y)) {
         tile_data.tile_type = tile_type;
+
+        if add_roof {
+            commands.entity(tile_data.entity).insert(Roof);
+        }
     }
 }
