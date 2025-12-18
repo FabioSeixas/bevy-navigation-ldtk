@@ -27,7 +27,7 @@ fn roof_opacity_system(
     mut tiles_q: Query<(&TilemapId, &TilePos, &mut TileColor)>,
     spatial_idx: Res<SpatialIndex>,
 ) {
-    const RADIUS: i32 = 4;
+    const RADIUS: i32 = 6;
     const TRANSPARENT_ALPHA: f32 = 0.1;
     const OPAQUE_ALPHA: f32 = 1.0;
 
@@ -46,13 +46,35 @@ fn roof_opacity_system(
         }
     }
 
-    // 2. Update opacity for all tiles based on their layer and if they are a roof.
+    // 2. Find all walls adjacent to the transparent positions.
+    let mut walls_to_make_transparent = std::collections::HashSet::new();
+    for &(x, y) in &transparent_positions {
+        for nx in (x - 1)..=(x + 1) {
+            for ny in (y - 1)..=(y + 1) {
+                if nx == x && ny == y {
+                    continue; // Skip the center tile
+                }
+                if let Some(tile_data) = spatial_idx.get_entity_data(nx, ny) {
+                    if matches!(tile_data.tile_type, TileType::Wall) {
+                        walls_to_make_transparent.insert((nx, ny));
+                    }
+                }
+            }
+        }
+    }
+
+    transparent_positions.extend(walls_to_make_transparent);
+
+    // 3. Update opacity for all tiles based on their layer and if they are a roof or an inner wall.
     for (tilemap_id, tile_pos, mut tile_color) in &mut tiles_q {
         let pos = (tile_pos.x as i32, tile_pos.y as i32);
 
         if let Some(tile_data) = spatial_idx.get_entity_data(pos.0, pos.1) {
-            // Check if the tile is a roof-like tile
-            if matches!(tile_data.tile_type, TileType::Inside | TileType::Door) {
+            // Check if the tile is a roof-like tile or a wall
+            if matches!(
+                tile_data.tile_type,
+                TileType::Inside | TileType::Door | TileType::Wall
+            ) {
                 // And check if it's on the correct layer for that logical tile
                 if Some(tilemap_id.0) == tile_data.tilemap_entity {
                     let target_alpha = if transparent_positions.contains(&pos) {
