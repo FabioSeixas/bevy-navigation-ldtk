@@ -165,27 +165,7 @@ impl Pathfinder {
                 .unwrap();
             let neighbor_tile_data = spatial_index.map.get(&(pos.x, pos.y)).unwrap();
 
-            let can_move = match (current_tile_data.tile_type, neighbor_tile_data.tile_type) {
-                // Cant move into a wall
-                (_, TileType::Wall) => false,
-                // Can move from door to door
-                (TileType::Door, TileType::Door) => true,
-                // From inside can move to a door
-                (TileType::Inside, TileType::Door) => true,
-                // From a door can move inside
-                (TileType::Door, TileType::Inside) => true,
-                // From outside can move to a door
-                (TileType::Outside, TileType::Door) => true,
-                // From a door can move outside
-                (TileType::Door, TileType::Outside) => true,
-                // From inside can move to another inside tile
-                (TileType::Inside, TileType::Inside) => true,
-                // From outside can move to another outside tile
-                (TileType::Outside, TileType::Outside) => true,
-                _ => false,
-            };
-
-            if !can_move {
+            if !current_tile_data.is_traversable(neighbor_tile_data) {
                 continue;
             }
 

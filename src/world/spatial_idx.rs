@@ -9,6 +9,30 @@ pub struct TileData {
     pub tilemap_entity: Option<Entity>,
 }
 
+impl TileData {
+    pub fn is_traversable(&self, destination_tile: &TileData) -> bool {
+        match (self.tile_type, destination_tile.tile_type) {
+            // Cant move into a wall
+            (_, TileType::Wall) => false,
+            // Can move from door to door
+            (TileType::Door, TileType::Door) => true,
+            // From inside can move to a door
+            (TileType::Inside, TileType::Door) => true,
+            // From a door can move inside
+            (TileType::Door, TileType::Inside) => true,
+            // From outside can move to a door
+            (TileType::Outside, TileType::Door) => true,
+            // From a door can move outside
+            (TileType::Door, TileType::Outside) => true,
+            // From inside can move to another inside tile
+            (TileType::Inside, TileType::Inside) => true,
+            // From outside can move to another outside tile
+            (TileType::Outside, TileType::Outside) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Resource, Default, Debug)]
 pub struct SpatialIndex {
     pub map: HashMap<(i32, i32), TileData>,
