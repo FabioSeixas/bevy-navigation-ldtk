@@ -3,7 +3,10 @@ use bevy_ecs_tilemap::map::TilemapId;
 
 use bevy_ecs_ldtk::prelude::*;
 
-use crate::world::{components::*, spatial_idx::*};
+use crate::{
+    events::{AgentEnteredTile, AgentLeftTile},
+    world::{components::*, spatial_idx::*},
+};
 
 pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<SpatialIndex>) {
     if let Ok(tile) = query.get(add.entity) {
@@ -13,6 +16,14 @@ pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<Sp
             tilemap_entity: None,
         });
     }
+}
+
+pub fn on_agent_left_tile(event: On<AgentLeftTile>, mut commands: Commands) {
+    commands.entity(event.entity).remove::<Occupied>();
+}
+
+pub fn on_agent_entered_tile(event: On<AgentEnteredTile>, mut commands: Commands) {
+    commands.entity(event.entity).insert(Occupied);
 }
 
 pub fn on_add_tile_enum_tags(

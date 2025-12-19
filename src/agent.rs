@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     constants::*,
+    events::{AgentEnteredTile, AgentLeftTile},
     pathfinder::Pathfinder,
     world::{components::*, grid::*, spatial_idx::*},
 };
@@ -260,12 +261,14 @@ fn check_agent_pathfinding(
 
                         if let Ok(_tile) = tile_query.get(tile_entity) {
                             occupied_now.pos.push(tile_entity.clone());
-                            commands.entity(tile_entity.clone()).insert(Occupied);
+                            commands.trigger(AgentEnteredTile {
+                                entity: tile_entity,
+                            });
 
                             if let Some(entity) =
                                 spatial_idx.get_entity(agent_curr_position.x, agent_curr_position.y)
                             {
-                                commands.entity(entity).remove::<Occupied>();
+                                commands.trigger(AgentLeftTile { entity });
                             }
 
                             commands.trigger(UpdatePathfindingCurrentStep {

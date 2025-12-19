@@ -3,6 +3,7 @@ mod constants;
 mod pathfinder;
 mod roof;
 mod world;
+mod events;
 
 use agent::{Agent, AgentPlugin, Walking};
 use bevy::{color::palettes::css::*, prelude::*};
