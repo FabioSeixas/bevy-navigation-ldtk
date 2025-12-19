@@ -1,9 +1,9 @@
 mod agent;
 mod constants;
+mod events;
 mod pathfinder;
 mod roof;
 mod world;
-mod events;
 
 use agent::{Agent, AgentPlugin, Walking};
 use bevy::{color::palettes::css::*, prelude::*};
@@ -22,7 +22,7 @@ fn main() {
         .add_plugins(WorldPlugin)
         .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
-        .add_systems(PreStartup, (setup_camera, spawn_grid).chain())
+        .add_systems(PreStartup, setup_camera)
         .add_systems(
             Update,
             (
@@ -126,20 +126,6 @@ fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
 
         ..Default::default()
     });
-}
-
-fn spawn_grid(mut commands: Commands) {
-    for y in 0..GRID_HEIGHT {
-        for x in 0..GRID_WIDTH {
-            let pos = Grid::grid_to_world(x, y);
-
-            commands.spawn((
-                Transform::from_translation(pos),
-                Tile { x, y },
-                GridPosition { x, y },
-            ));
-        }
-    }
 }
 
 fn mark_destination_on_map(query: Query<&Walking, With<Agent>>, mut gizmos: Gizmos) {

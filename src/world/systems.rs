@@ -4,9 +4,24 @@ use bevy_ecs_tilemap::map::TilemapId;
 use bevy_ecs_ldtk::prelude::*;
 
 use crate::{
+    constants::{GRID_HEIGHT, GRID_WIDTH},
     events::{AgentEnteredTile, AgentLeftTile},
-    world::{components::*, spatial_idx::*},
+    world::{components::*, grid::Grid, spatial_idx::*},
 };
+
+pub fn spawn_grid(mut commands: Commands) {
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            let pos = Grid::grid_to_world(x, y);
+
+            commands.spawn((
+                Transform::from_translation(pos),
+                Tile { x, y },
+                GridPosition { x, y },
+            ));
+        }
+    }
+}
 
 pub fn on_add_tile(add: On<Add, Tile>, query: Query<&Tile>, mut index: ResMut<SpatialIndex>) {
     if let Ok(tile) = query.get(add.entity) {
