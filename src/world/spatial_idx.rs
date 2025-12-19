@@ -5,31 +5,84 @@ use crate::world::components::*;
 #[derive(Clone, Copy, Debug)]
 pub struct TileData {
     pub entity: Entity,
-    pub tile_type: TileType,
+    pub flags: TileFlags,
     pub tilemap_entity: Option<Entity>,
 }
 
 impl TileData {
-    pub fn is_traversable(&self, destination_tile: &TileData) -> bool {
-        match (self.tile_type, destination_tile.tile_type) {
-            // Cant move into a wall
-            (_, TileType::Wall) => false,
-            // Can move from door to door
-            (TileType::Door, TileType::Door) => true,
-            // From inside can move to a door
-            (TileType::Inside, TileType::Door) => true,
-            // From a door can move inside
-            (TileType::Door, TileType::Inside) => true,
-            // From outside can move to a door
-            (TileType::Outside, TileType::Door) => true,
-            // From a door can move outside
-            (TileType::Door, TileType::Outside) => true,
-            // From inside can move to another inside tile
-            (TileType::Inside, TileType::Inside) => true,
-            // From outside can move to another outside tile
-            (TileType::Outside, TileType::Outside) => true,
-            _ => false,
+    pub fn is_building(&self) -> bool {
+        self.flags
+            .intersects(TileFlags::INSIDE | TileFlags::DOOR | TileFlags::WALL)
+    }
+
+    pub fn is_wall(&self) -> bool {
+        self.flags.contains(TileFlags::WALL)
+    }
+
+    pub fn is_outside(&self) -> bool {
+        self.flags.contains(TileFlags::OUTSIDE)
+    }
+
+    pub fn is_valid_destination(&self) -> bool {
+        if self.flags.contains(TileFlags::DOOR) {
+            return false;
         }
+
+        self.is_walkable()
+    }
+
+    pub fn is_indoor(&self) -> bool {
+        self.flags.intersects(TileFlags::DOOR | TileFlags::INSIDE)
+    }
+
+    pub fn is_walkable(&self) -> bool {
+        // Walls are never walkable
+        if self.flags.contains(TileFlags::WALL) {
+            return false;
+        }
+
+        // Furniture blocks movement
+        if self.flags.contains(TileFlags::FURNITURE) {
+            return false;
+        }
+
+        // Must be some form of traversable terrain
+        if !self.flags.contains(TileFlags::TRAVERSABLE_TERRAIN) {
+            return false;
+        }
+
+        true
+    }
+
+    pub fn is_traversable_to(&self, destination_tile: &TileData) -> bool {
+        if !destination_tile.is_walkable() {
+            return false;
+        }
+
+        let current_is_inside = self.flags.contains(TileFlags::INSIDE);
+        let current_is_outside = self.flags.contains(TileFlags::OUTSIDE);
+        let current_is_door = self.flags.contains(TileFlags::DOOR);
+
+        let dest_is_inside = destination_tile.flags.contains(TileFlags::INSIDE);
+        let dest_is_outside = destination_tile.flags.contains(TileFlags::OUTSIDE);
+        let dest_is_door = destination_tile.flags.contains(TileFlags::DOOR);
+
+        // Allow movement between any two 'outside' tiles
+        if current_is_outside && dest_is_outside {
+            return true;
+        }
+
+        // Allow movement between any two 'inside' tiles
+        if current_is_inside && dest_is_inside {
+            return true;
+        }
+
+        // Allow movement to/from a door
+        if current_is_door || dest_is_door {
+            return true;
+        }
+
+        false
     }
 }
 

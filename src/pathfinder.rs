@@ -165,7 +165,7 @@ impl Pathfinder {
                 .unwrap();
             let neighbor_tile_data = spatial_index.map.get(&(pos.x, pos.y)).unwrap();
 
-            if !current_tile_data.is_traversable(neighbor_tile_data) {
+            if !current_tile_data.is_traversable_to(neighbor_tile_data) {
                 continue;
             }
 

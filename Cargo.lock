@@ -3086,6 +3086,7 @@ dependencies = [
  "bevy",
  "bevy_ecs_ldtk",
  "bevy_ecs_tilemap",
+ "bitflags 2.10.0",
  "rand 0.8.5",
 ]
 

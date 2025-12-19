@@ -34,7 +34,7 @@ fn roof_opacity_system(
     let mut transparent_positions = std::collections::HashSet::new();
     for agent_pos in &agents_q {
         if let Some(tile_data) = spatial_idx.get_entity_data(agent_pos.x, agent_pos.y) {
-            if matches!(tile_data.tile_type, TileType::Inside | TileType::Door) {
+            if tile_data.is_indoor() {
                 // Agent is inside, so mark a radius of tiles for transparency.
                 for x in (agent_pos.x.saturating_sub(RADIUS))..=(agent_pos.x + RADIUS) {
                     for y in (agent_pos.y.saturating_sub(RADIUS))..=(agent_pos.y + RADIUS) {
@@ -54,7 +54,7 @@ fn roof_opacity_system(
                     continue; // Skip the center tile
                 }
                 if let Some(tile_data) = spatial_idx.get_entity_data(nx, ny) {
-                    if matches!(tile_data.tile_type, TileType::Wall) {
+                    if tile_data.is_wall() {
                         walls_to_make_transparent.insert((nx, ny));
                     }
                 }
@@ -70,10 +70,7 @@ fn roof_opacity_system(
 
         if let Some(tile_data) = spatial_idx.get_entity_data(pos.0, pos.1) {
             // Check if the tile is a roof-like tile or a wall
-            if matches!(
-                tile_data.tile_type,
-                TileType::Inside | TileType::Door | TileType::Wall
-            ) {
+            if tile_data.is_building() {
                 // And check if it's on the correct layer for that logical tile
                 if Some(tilemap_id.0) == tile_data.tilemap_entity {
                     let target_alpha = if transparent_positions.contains(&pos) {

@@ -100,7 +100,7 @@ fn spawn_agent_system(
                 while !done {
                     let grid_pos = Grid::get_random_position();
                     if let Some(tile_data) = spatial_idx.map.get(&(grid_pos.x, grid_pos.y)) {
-                        if tile_data.tile_type == TileType::Outside {
+                        if tile_data.is_outside() {
                             if let Ok(_) = query.get(tile_data.entity) {
                                 done = true;
                                 let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
@@ -155,7 +155,7 @@ fn define_destination_system(
         while chosen_destination_pos.is_none() {
             let pos = Grid::get_random_position();
             if let Some(tile_data) = spatial_idx.map.get(&(pos.x, pos.y)) {
-                if tile_data.tile_type != TileType::Wall && tile_data.tile_type != TileType::Door {
+                if tile_data.is_valid_destination() {
                     if let Ok(_) = tile_query.get(tile_data.entity) {
                         chosen_destination_pos = Some(pos);
                     }

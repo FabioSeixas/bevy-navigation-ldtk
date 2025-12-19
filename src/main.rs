@@ -28,8 +28,6 @@ fn main() {
             (
                 mark_destination_on_map,
                 draw_tile_gizmos,
-                on_disocuppied,
-                mouse_click_world_pos,
                 toggle_gizmos,
                 // debug
             ),
@@ -64,51 +62,6 @@ fn toggle_gizmos(mut config_store: ResMut<GizmoConfigStore>, input: Res<ButtonIn
 //         }
 //     }
 // }
-
-fn mouse_click_world_pos(
-    buttons: Res<ButtonInput<MouseButton>>,
-
-    windows: Query<&Window>,
-
-    camera_query: Query<(&Camera, &GlobalTransform)>,
-
-    spatial_idx: Res<SpatialIndex>,
-
-    mut commands: Commands,
-) {
-    // detect right click
-
-    if buttons.just_pressed(MouseButton::Right) {
-        let window = windows.single().unwrap();
-
-        // get the cursor window position
-
-        if let Some(screen_pos) = window.cursor_position() {
-            if let Ok((camera, camera_transform)) = camera_query.single() {
-                // convert window position -> world coordinates
-
-                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, screen_pos) {
-                    let grid_position = Grid::world_to_grid(world_pos);
-
-                    if let Some(entity) = spatial_idx.get_entity(grid_position.x, grid_position.y) {
-                        commands.entity(entity).insert((
-                            Sprite {
-                                color: Color::linear_rgb(0.20, 0.20, 0.80),
-
-                                custom_size: Some(Vec2::splat(TILE_SIZE - 1.0)), // little gap
-
-                                ..default()
-                            },
-                            Occupied,
-                        ));
-
-                        // println!("\n SET AS OCCUPIED {:?}\n", grid_position);
-                    }
-                }
-            }
-        }
-    }
-}
 
 fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
@@ -172,24 +125,28 @@ fn draw_tile_gizmos(
     mut gizmos: Gizmos,
 ) {
     // First, draw gizmos for TileTypes
-
     for (coords_tuple, tile_data) in &spatial_idx.map {
         let pos = Grid::grid_to_world(coords_tuple.0, coords_tuple.1);
 
-        let color: Option<Srgba> = match tile_data.tile_type {
-            TileType::Inside => Some(GREEN.into()),
-
-            TileType::Wall => Some(GRAY.into()),
-
-            TileType::Door => Some(YELLOW.into()),
-
-            TileType::Outside => None, // Don't draw anything for Outside
+        let color = if tile_data.flags.contains(TileFlags::INSIDE) {
+            if tile_data.flags.contains(TileFlags::FURNITURE) {
+                Some(RED)
+            } else {
+                Some(GREEN)
+            }
+        } else if tile_data.flags.contains(TileFlags::WALL) {
+            Some(GRAY)
+        } else if tile_data.flags.contains(TileFlags::DOOR) {
+            Some(YELLOW)
+        } else if tile_data.flags.contains(TileFlags::FURNITURE) {
+            Some(RED)
+        } else {
+            None
         };
 
         if let Some(color) = color {
             gizmos.rect_2d(
                 pos.truncate(),
-                // 0.0,
                 Vec2::splat(TILE_SIZE - 4.0), // A bit smaller than the tile
                 color,
             );
@@ -197,7 +154,6 @@ fn draw_tile_gizmos(
     }
 
     // Then, draw over them for Occupied tiles
-
     for coords in occupied_query.iter() {
         let pos = Grid::grid_to_world(coords.x, coords.y);
 
