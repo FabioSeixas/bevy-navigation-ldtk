@@ -6,8 +6,7 @@ use bevy_ecs_tilemap::{
 
 use crate::{
     agent::Agent,
-    spatial_idx::SpatialIndex,
-    world::{GridPosition, TileType},
+    world::{components::*, spatial_idx::*},
 };
 
 pub struct RoofPlugin;

@@ -1,6 +1,6 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::world::{GridPosition, TileType};
+use crate::world::components::*;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TileData {

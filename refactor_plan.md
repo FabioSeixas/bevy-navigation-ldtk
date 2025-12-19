@@ -17,7 +17,9 @@ This tight coupling makes the code harder to understand, test, and extend.
 
 ### Step 1: Centralize World Rules
 
-*   **Why:** The rules for movement and traversability are fundamental properties of the game world, not the pathfinding algorithm. Centralizing this logic in `world.rs` makes the `world` module the single source of truth for the world's "physics." This makes the `Pathfinder` more generic, as it no longer needs to know the specific rules of this world, and it allows other systems to query the same rules if needed.
+*   **Why:** The rules for movement and traversability are fundamental properties of the game world, not the pathfinding algorithm. 
+Centralizing this logic in `world.rs` makes the `world` module the single source of truth for the world's "physics." 
+This makes the `Pathfinder` more generic, as it no longer needs to know the specific rules of this world, and it allows other systems to query the same rules if needed.
 
 *   **How:**
     1.  Create a new public function in `src/world.rs`: `pub fn is_traversable(from_tile: &TileData, to_tile: &TileData) -> bool`.

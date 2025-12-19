@@ -3,9 +3,8 @@ use std::collections::{HashSet, VecDeque};
 use bevy::prelude::*;
 
 use crate::{
-    spatial_idx::SpatialIndex,
-    world::{GridPosition, TileType},
     constants::{GRID_HEIGHT, GRID_WIDTH, PATHFINDER_MAX_DEPTH},
+    world::{components::*, spatial_idx::*},
 };
 
 #[derive(Clone, Debug)]

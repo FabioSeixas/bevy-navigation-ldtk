@@ -2,7 +2,6 @@ mod agent;
 mod constants;
 mod pathfinder;
 mod roof;
-mod spatial_idx;
 mod world;
 
 use agent::{Agent, AgentPlugin, Walking};
@@ -11,8 +10,7 @@ use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use constants::*;
 use roof::RoofPlugin;
-use spatial_idx::*;
-use world::*;
+use world::{components::*, grid::*, plugin::*, spatial_idx::*};
 
 fn main() {
     App::new()
@@ -20,12 +18,10 @@ fn main() {
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
+        .add_plugins(WorldPlugin)
         .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
-        .init_resource::<SpatialIndex>()
         .add_systems(PreStartup, (setup_camera, spawn_grid).chain())
-        .add_observer(on_add_tile)
-        .add_observer(on_add_tile_enum_tags)
         .add_systems(
             Update,
             (
@@ -43,11 +39,11 @@ fn main() {
 // TilemapBundle
 fn debug(query: Query<(Entity, &TilePos, &Transform, &TileColor)>) {
     for (entity, tile_pos, transform, tile_color) in query {
-            dbg!(entity);
-            dbg!(tile_color);
-            dbg!(tile_pos);
-            dbg!(transform.translation);
-            println!("-------------------");
+        dbg!(entity);
+        dbg!(tile_color);
+        dbg!(tile_pos);
+        dbg!(transform.translation);
+        println!("-------------------");
     }
 }
 

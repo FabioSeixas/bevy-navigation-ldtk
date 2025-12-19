@@ -5,8 +5,7 @@ use bevy::prelude::*;
 use crate::{
     constants::*,
     pathfinder::Pathfinder,
-    spatial_idx::SpatialIndex,
-    world::{Grid, GridPosition, Occupied, Tile, TileType},
+    world::{components::*, grid::*, spatial_idx::*},
 };
 
 pub struct AgentPlugin;
