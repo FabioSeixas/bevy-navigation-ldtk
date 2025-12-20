@@ -69,7 +69,7 @@ fn setup_animations(
 }
 
 fn update_animation_direction(
-    mut query: Query<(&mut Animation, &AnimationDirection)>,
+    mut query: Query<(&mut Animation, &AnimationDirection), Changed<AnimationDirection>>,
     animations: Res<CharacterAnimations>,
 ) {
     for (mut animation, direction) in query.iter_mut() {
