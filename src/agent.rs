@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use bevy::prelude::*;
+use bevy::{gizmos::config::DefaultGizmoConfigGroup, prelude::*, sprite::Anchor};
 
 use crate::{
     animation::{AnimationDirection, AnimationTimer, CharacterAnimations, CharacterSpriteSheet},
@@ -136,6 +136,7 @@ fn spawn_agent_system(
                                             index: animations.walk_down.first,
                                         },
                                     ),
+                                    Anchor::BOTTOM_CENTER,
                                     Transform::from_translation(Vec3 {
                                         x: pos.x,
                                         y: pos.y,
