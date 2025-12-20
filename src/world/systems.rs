@@ -4,7 +4,9 @@ use bevy_ecs_tilemap::map::TilemapId;
 use bevy_ecs_ldtk::prelude::*;
 
 use crate::{
-    constants::{GRID_HEIGHT, GRID_WIDTH}, events::{AgentEnteredTile, AgentLeftTile}, roof::Roof, world::{components::*, grid::Grid, spatial_idx::*}
+    constants::{GRID_HEIGHT, GRID_WIDTH},
+    events::{AgentEnteredTile, AgentLeftTile},
+    world::{components::*, grid::Grid, spatial_idx::*},
 };
 
 pub fn on_agent_left_tile(event: On<AgentLeftTile>, mut commands: Commands) {
@@ -43,11 +45,9 @@ pub fn on_add_tile_enum_tags(
     add: On<Add, TileEnumTags>,
     query_third_party_tile: Query<(&TileEnumTags, &GridCoords, &TilemapId)>,
     mut index: ResMut<SpatialIndex>,
-    mut commands: Commands,
 ) {
     let (enum_tags, coords, tilemap_id) = query_third_party_tile.get(add.entity).unwrap();
 
-    let mut add_roof = false;
     let mut tile_flags = TileFlags::empty();
 
     if enum_tags.tags.iter().any(|t| t == "Wall") {
@@ -55,12 +55,13 @@ pub fn on_add_tile_enum_tags(
     } else if enum_tags.tags.iter().any(|t| t == "Door") {
         tile_flags |= TileFlags::DOOR;
     } else if enum_tags.tags.iter().any(|t| t == "Inside") {
-        add_roof = true;
         tile_flags |= TileFlags::INSIDE;
     } else if enum_tags.tags.iter().any(|t| t == "Outside") {
         tile_flags |= TileFlags::OUTSIDE;
     } else if enum_tags.tags.iter().any(|t| t == "Furniture") {
         tile_flags |= TileFlags::FURNITURE;
+    } else if enum_tags.tags.iter().any(|t| t == "Roof") {
+        tile_flags |= TileFlags::ROOF;
     } else {
         // Don't change type if no matching tag found
         return;
@@ -69,9 +70,5 @@ pub fn on_add_tile_enum_tags(
     if let Some(tile_data) = index.map.get_mut(&(coords.x, coords.y)) {
         tile_data.flags |= tile_flags;
         tile_data.tilemap_entity = Some(tilemap_id.0);
-
-        if add_roof {
-            commands.entity(tile_data.entity).insert(Roof);
-        }
     }
 }

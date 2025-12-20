@@ -4,3 +4,6 @@ run:
 rls:
 	cargo run --release
 
+build:
+	cargo build --release
+

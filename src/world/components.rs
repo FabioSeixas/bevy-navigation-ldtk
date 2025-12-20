@@ -10,6 +10,7 @@ bitflags! {
         const WALL                = 1 << 3;
         const DOOR                = 1 << 4;
         const FURNITURE           = 1 << 5;
+        const ROOF                = 1 << 6;
     }
 }
 
