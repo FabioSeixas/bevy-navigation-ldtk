@@ -10,6 +10,9 @@ use crate::{
     world::{components::*, grid::*, spatial_idx::*},
 };
 
+#[derive(Component)]
+pub struct AgentDebugColor(pub Color);
+
 pub struct AgentPlugin;
 
 impl Plugin for AgentPlugin {
@@ -18,7 +21,6 @@ impl Plugin for AgentPlugin {
             .add_observer(update_pathfinding_curr_step)
             .add_observer(pathfinding_finish_path_step)
             .add_observer(update_agent_position)
-            .add_observer(on_update_agent_color)
             .add_systems(
                 Update,
                 (
@@ -27,6 +29,8 @@ impl Plugin for AgentPlugin {
                     movement_agent,
                     check_agent_pathfinding,
                     spawn_agent_system,
+                    toggle_pathfinding_ui_visibility,
+                    update_agent_colors_based_on_gizmos,
                 ),
             );
     }
@@ -329,31 +333,18 @@ fn update_pathfinding_curr_step(
     }
 }
 
-#[derive(Event, Debug)]
-struct UpdateAgentColor {
-    entity: Entity,
-    color: Color,
-}
-
+struct UpdateAgentColor;
 impl UpdateAgentColor {
     pub fn calculating_path(commands: &mut Commands, agent_entity: Entity) {
-        commands.trigger(UpdateAgentColor {
-            entity: agent_entity,
-            color: Color::srgb(0.2, 1.0, 0.2),
-        });
+        commands
+            .entity(agent_entity)
+            .insert(AgentDebugColor(Color::srgb(0.2, 1.0, 0.2)));
     }
 
     pub fn walking_path(commands: &mut Commands, agent_entity: Entity) {
-        commands.trigger(UpdateAgentColor {
-            entity: agent_entity,
-            color: Color::srgb(1.0, 0.2, 0.2),
-        });
-    }
-}
-
-fn on_update_agent_color(event: On<UpdateAgentColor>, mut p_query: Query<&mut Sprite>) {
-    if let Ok(mut sprite) = p_query.get_mut(event.entity) {
-        sprite.color = event.color;
+        commands
+            .entity(agent_entity)
+            .insert(AgentDebugColor(Color::srgb(1.0, 0.2, 0.2)));
     }
 }
 
@@ -476,6 +467,34 @@ fn movement_agent(
                     }
                 }
             }
+        }
+    }
+}
+
+fn toggle_pathfinding_ui_visibility(
+    config_store: Res<GizmoConfigStore>,
+    mut query: Query<&mut Visibility, With<AgentPathfinding>>,
+) {
+    let (config, _) = config_store.config::<DefaultGizmoConfigGroup>();
+    for mut visibility in query.iter_mut() {
+        if config.enabled {
+            *visibility = Visibility::Visible;
+        } else {
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+fn update_agent_colors_based_on_gizmos(
+    config_store: Res<GizmoConfigStore>,
+    mut query: Query<(&mut Sprite, &AgentDebugColor), With<Agent>>,
+) {
+    let (config, _) = config_store.config::<DefaultGizmoConfigGroup>();
+    for (mut sprite, debug_color) in query.iter_mut() {
+        if config.enabled {
+            sprite.color = debug_color.0;
+        } else {
+            sprite.color = Color::WHITE;
         }
     }
 }

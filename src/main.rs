@@ -71,7 +71,7 @@ fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            scale: 0.7,
+            scale: 1.0,
 
             ..OrthographicProjection::default_2d()
         }),
