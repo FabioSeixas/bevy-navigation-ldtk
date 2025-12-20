@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::{
+    animation::{AnimationDirection, AnimationTimer, CharacterAnimations, CharacterSpriteSheet},
     constants::*,
     events::{AgentEnteredTile, AgentLeftTile},
     pathfinder::Pathfinder,
@@ -92,6 +93,8 @@ fn spawn_agent_system(
     timer: Option<ResMut<SpawnAgentTimer>>,
     query: Query<&GridPosition, (With<Tile>, Without<Occupied>)>,
     spatial_idx: Res<SpatialIndex>,
+    character_sprite_sheet: Res<CharacterSpriteSheet>,
+    animations: Res<CharacterAnimations>,
 ) {
     if let Some(mut timer) = timer {
         if timer.0.tick(time.delta()).just_finished() {
@@ -109,7 +112,7 @@ fn spawn_agent_system(
                                         AgentPathfinding::default(),
                                         grid_pos.clone(),
                                         Sprite {
-                                            color: Color::linear_rgb(1.0, 1.2, 1.2),
+                                            color: Color::srgb(1.0, 1.2, 1.2),
                                             custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
                                             ..default()
                                         },
@@ -120,19 +123,28 @@ fn spawn_agent_system(
                                         }),
                                     ))
                                     .id();
+
                                 commands.spawn((
                                     Agent { pathfinding_entity },
                                     grid_pos,
-                                    Sprite {
-                                        color: Color::linear_rgb(1.0, 0.2, 0.2),
-                                        custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                                        ..default()
-                                    },
+                                    Sprite::from_atlas_image(
+                                        character_sprite_sheet.texture.clone(),
+                                        TextureAtlas {
+                                            layout: character_sprite_sheet
+                                                .texture_atlas_layout
+                                                .clone(),
+                                            index: animations.walk_down.first,
+                                        },
+                                    ),
                                     Transform::from_translation(Vec3 {
                                         x: pos.x,
                                         y: pos.y,
                                         z: AGENT_Z_VALUE,
-                                    }),
+                                    })
+                                    .with_scale(Vec3::splat(0.8)),
+                                    animations.walk_down,
+                                    AnimationDirection::Down,
+                                    AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
                                 ));
                             }
                         }
@@ -326,14 +338,14 @@ impl UpdateAgentColor {
     pub fn calculating_path(commands: &mut Commands, agent_entity: Entity) {
         commands.trigger(UpdateAgentColor {
             entity: agent_entity,
-            color: Color::linear_rgb(0.2, 1.0, 0.2),
+            color: Color::srgb(0.2, 1.0, 0.2),
         });
     }
 
     pub fn walking_path(commands: &mut Commands, agent_entity: Entity) {
         commands.trigger(UpdateAgentColor {
             entity: agent_entity,
-            color: Color::linear_rgb(1.0, 0.2, 0.2),
+            color: Color::srgb(1.0, 0.2, 0.2),
         });
     }
 }
@@ -382,14 +394,30 @@ fn update_agent_position(
 }
 
 fn movement_agent(
-    mut query: Query<(Entity, &GridPosition, &mut Transform, &Agent), With<Walking>>,
+    query: Query<
+        (
+            Entity,
+            &GridPosition,
+            &mut Transform,
+            &mut AnimationDirection,
+            &mut AnimationTimer,
+            &mut Sprite,
+            &Agent,
+        ),
+        With<Walking>,
+    >,
     p_query: Query<&GridPosition, With<AgentPathfinding>>,
     time: Res<Time>,
     mut commands: Commands,
+    animations: Res<CharacterAnimations>,
 ) {
-    for (entity, agent_position, mut transform, agent) in &mut query {
+    for (entity, agent_position, mut transform, mut anim_direction, mut timer, mut sprite, agent) in
+        query
+    {
         if let Ok(pathfinding_position) = p_query.get(agent.pathfinding_entity) {
             if pathfinding_position.ne(agent_position) {
+                timer.unpause();
+
                 let current_point = transform.translation;
                 let mut target_point =
                     Grid::grid_to_world(pathfinding_position.x, pathfinding_position.y);
@@ -414,8 +442,37 @@ fn movement_agent(
                         entity: agent.pathfinding_entity,
                     });
                 } else {
-                    let direction = to_target / distance;
-                    transform.translation += direction * step;
+                    let direction_vec = to_target.normalize();
+
+                    let new_direction = if direction_vec.x.abs() > direction_vec.y.abs() {
+                        if direction_vec.x > 0.0 {
+                            AnimationDirection::Right
+                        } else {
+                            AnimationDirection::Left
+                        }
+                    } else {
+                        if direction_vec.y > 0.0 {
+                            AnimationDirection::Up
+                        } else {
+                            AnimationDirection::Down
+                        }
+                    };
+
+                    if *anim_direction != new_direction {
+                        *anim_direction = new_direction;
+                    }
+
+                    transform.translation += direction_vec * step;
+                }
+            } else {
+                if let Some(atlas) = &mut sprite.texture_atlas {
+                    timer.pause();
+                    match *anim_direction {
+                        AnimationDirection::Up => atlas.index = animations.walk_up.first,
+                        AnimationDirection::Down => atlas.index = animations.walk_down.first,
+                        AnimationDirection::Left => atlas.index = animations.walk_left.first,
+                        AnimationDirection::Right => atlas.index = animations.walk_right.first,
+                    }
                 }
             }
         }

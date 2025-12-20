@@ -1,4 +1,5 @@
 mod agent;
+mod animation;
 mod constants;
 mod events;
 mod pathfinder;
@@ -6,6 +7,7 @@ mod roof;
 mod world;
 
 use agent::{Agent, AgentPlugin, Walking};
+use animation::AnimationPlugin;
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
@@ -15,11 +17,12 @@ use world::{components::*, grid::*, plugin::*, spatial_idx::*};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
         .add_plugins(WorldPlugin)
+        .add_plugins(AnimationPlugin)
         .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
         .add_systems(PreStartup, setup_camera)
@@ -34,6 +37,7 @@ fn main() {
         )
         .run();
 }
+
 
 // TilemapBundle
 fn debug(query: Query<(Entity, &TilePos, &Transform, &TileColor)>) {
