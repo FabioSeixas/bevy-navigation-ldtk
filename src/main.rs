@@ -1,17 +1,21 @@
 mod agent;
 mod animation;
+mod background;
 mod constants;
 mod events;
+mod message_animation;
 mod pathfinder;
 mod roof;
 mod world;
 
 use agent::{Agent, AgentPlugin, Walking};
 use animation::AnimationPlugin;
+use background::BackgroundPlugin;
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use constants::*;
+use message_animation::MessageAnimationPlugin;
 use roof::RoofPlugin;
 use world::{components::*, grid::*, plugin::*, spatial_idx::*};
 
@@ -22,7 +26,9 @@ fn main() {
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
         .add_plugins(WorldPlugin)
+        .add_plugins(BackgroundPlugin)
         .add_plugins(AnimationPlugin)
+        .add_plugins(MessageAnimationPlugin)
         .init_resource::<GizmoConfigStore>()
         .insert_resource(LevelSelection::index(0))
         .add_systems(PreStartup, setup_camera)
