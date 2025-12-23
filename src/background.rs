@@ -36,7 +36,7 @@ fn setup_channel(mut commands: Commands) {
     commands.insert_resource(MessageChannel { sender, receiver });
 }
 
-const LLM_MODEL: &str = "mistral:latest";
+const LLM_MODEL: &str = "tinyllama:latest";
 const PROMPT: &str = r#"SYSTEM: You are an NPC in a medieval RPG. NPC DATA: Name: Eldrin Role: Blacksmith Personality: Cynical, honest, tired Loyalty: Iron Guild Mood: Irritated WORLD STATE: - Baron raised taxes yesterday - Bandits near north road RULES: - Never mention game mechanics - Max 3 sentences - Speak in medieval tone PLAYER: Do you have any work for me?"#;
 
 #[derive(Serialize)]
@@ -71,33 +71,29 @@ fn spawn_task(channel: Res<MessageChannel>) {
             let request = ehttp::Request::post(url, body.as_bytes().to_vec())
                 .with_timeout(Some(Duration::from_secs(60)));
 
-            ehttp::fetch(request, move |response| {
-                match response {
-                    Ok(res) => {
-                        // println!("Got response: {:?}", res.text());
-                        for line in res.text().unwrap().split('\n') {
-                            // println!("Got line: {:?}", GenerationResponse::from(line));
-                            let p_line: GenerationResponse =
-                                serde_json::from_str(line).expect("error deserializing");
-                            println!("Got line: {:?}", p_line);
+            let response = ehttp::fetch_blocking(&request);
+            match response {
+                Ok(res) => {
+                    for line in res.text().unwrap().split('\n') {
+                        let p_line: GenerationResponse =
+                            serde_json::from_str(line).expect("error deserializing http response");
 
-                            if p_line.done {
-                                return;
-                            } else {
-                                _sender
-                                    .send(Message {
-                                        id: msg_id,
-                                        content: p_line.response,
-                                    })
-                                    .expect("error sending msg through channel");
-                            }
+                        if p_line.done {
+                            return;
+                        } else {
+                            _sender
+                                .send(Message {
+                                    id: msg_id,
+                                    content: p_line.response,
+                                })
+                                .expect("error sending msg through channel");
                         }
                     }
-                    Err(err) => {
-                        println!("Error: {:?}", err);
-                    }
                 }
-            });
+                Err(err) => {
+                    println!("HTTP Error: {:?}", err);
+                }
+            }
         }
     })
     .detach();
