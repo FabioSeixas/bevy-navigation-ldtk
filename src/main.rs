@@ -8,14 +8,16 @@ mod message_animation;
 mod pathfinder;
 mod roof;
 mod world;
+mod walk;
 
-use agent::{Agent, AgentPlugin, Walking};
+use agent::{Agent, AgentPlugin};
 use animation::AnimationPlugin;
 use background::BackgroundPlugin;
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use brain::*;
+use walk::*;
 use constants::*;
 use message_animation::MessageAnimationPlugin;
 use roof::RoofPlugin;
@@ -30,6 +32,7 @@ fn main() {
         .add_plugins(BrainPlugin)
         .add_plugins(WorldPlugin)
         .add_plugins(BackgroundPlugin)
+        .add_plugins(WalkPlugin)
         .add_plugins(AnimationPlugin)
         .add_plugins(MessageAnimationPlugin)
         .init_resource::<GizmoConfigStore>()
