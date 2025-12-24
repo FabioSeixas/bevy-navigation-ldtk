@@ -3,13 +3,15 @@ mod animation;
 mod background;
 mod brain;
 mod constants;
+mod consume;
 mod events;
+mod interaction;
+mod interaction_queue;
 mod message_animation;
 mod pathfinder;
 mod roof;
-mod world;
 mod walk;
-mod consume;
+mod world;
 
 use agent::{Agent, AgentPlugin};
 use animation::AnimationPlugin;
@@ -18,19 +20,24 @@ use bevy::{color::palettes::css::*, log::LogPlugin, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use brain::*;
-use walk::*;
-use consume::*;
 use constants::*;
+use consume::*;
+use interaction::InteractionPlugin;
 use message_animation::MessageAnimationPlugin;
 use roof::RoofPlugin;
+use walk::{components::Walking, plugin::*};
 use world::{components::*, grid::*, plugin::*, spatial_idx::*};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()).set(LogPlugin {
-            level: bevy::log::Level::INFO,
-            ..Default::default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(LogPlugin {
+                    level: bevy::log::Level::INFO,
+                    ..Default::default()
+                }),
+        )
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
@@ -38,6 +45,7 @@ fn main() {
         .add_plugins(WorldPlugin)
         .add_plugins(BackgroundPlugin)
         .add_plugins(WalkPlugin)
+        .add_plugins(InteractionPlugin)
         .add_plugins(ConsumePlugin)
         .add_plugins(AnimationPlugin)
         .add_plugins(MessageAnimationPlugin)

@@ -6,8 +6,9 @@ use crate::{
     animation::{AnimationDirection, AnimationTimer, CharacterAnimations, CharacterSpriteSheet},
     constants::*,
     events::{AgentEnteredTile, AgentLeftTile},
+    interaction_queue::AgentInteractionQueue,
     pathfinder::Pathfinder,
-    walk::Walking,
+    walk::components::Walking,
     world::{components::*, grid::*, spatial_idx::*},
 };
 
@@ -81,6 +82,7 @@ fn spawn_agent_system(
                                         pathfinding_entity,
                                         hungry: 0.,
                                     },
+                                    AgentInteractionQueue::new(),
                                     grid_pos,
                                     Sprite::from_atlas_image(
                                         character_sprite_sheet.texture.clone(),

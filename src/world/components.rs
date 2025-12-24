@@ -32,6 +32,20 @@ pub struct GridPosition {
     pub y: i32,
 }
 
+impl GridPosition {
+    // Euclidian distance
+    pub fn calc_distance(&self, reference: &GridPosition) -> f32 {
+        let dx = (reference.x - self.x) as f32;
+        let dy = (reference.y - self.y) as f32;
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    // TODO: implement 
+    pub fn is_adjacent(&self, reference: &GridPosition) -> bool {
+        true
+    }
+}
+
 // #########################
 // OCCUPIED
 // #########################

@@ -3,6 +3,7 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
+    walk::{components::{Walking, WalkingAction}, events::DefineRandomDestination},
     world::{
         components::{GridPosition, Occupied, Tile},
         grid::Grid,
@@ -10,38 +11,7 @@ use crate::{
     },
 };
 
-pub struct WalkPlugin;
-
-impl Plugin for WalkPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_observer(define_random_destination)
-            .add_systems(PreUpdate, walking_action_system.in_set(BigBrainSet::Actions));
-    }
-}
-
-#[derive(Component)]
-pub struct Walking {
-    pub destination: GridPosition,
-}
-
-#[derive(Clone, Component, Debug, ActionBuilder)]
-pub struct WalkingAction {
-    destination: Option<GridPosition>,
-}
-
-impl WalkingAction {
-    pub fn random_destination() -> Self {
-        Self { destination: None }
-    }
-
-    pub fn destination(p: GridPosition) -> Self {
-        Self {
-            destination: Some(p),
-        }
-    }
-}
-
-fn walking_action_system(
+pub fn walking_action_system(
     agent_q: Query<(&Walking, &GridPosition), With<Agent>>,
     mut query: Query<(&Actor, &mut ActionState, &WalkingAction, &ActionSpan)>,
     mut commands: Commands,
@@ -76,6 +46,7 @@ fn walking_action_system(
             // All Actions should make sure to handle cancellations!
             ActionState::Cancelled => {
                 info!("Walking was cancelled");
+                commands.entity(entity).remove::<Walking>();
                 *state = ActionState::Failure;
             }
             _ => {}
@@ -83,12 +54,7 @@ fn walking_action_system(
     }
 }
 
-#[derive(Event, Debug)]
-pub struct DefineRandomDestination {
-    pub entity: Entity,
-}
-
-fn define_random_destination(
+pub fn define_random_destination(
     event: On<DefineRandomDestination>,
     tile_query: Query<&Tile, Without<Occupied>>,
     spatial_idx: Res<SpatialIndex>,

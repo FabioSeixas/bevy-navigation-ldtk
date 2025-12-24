@@ -5,6 +5,8 @@ use libsql::Builder;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use crate::constants::BACKGROUND_ACTIVE;
+
 pub struct BackgroundPlugin;
 
 impl Plugin for BackgroundPlugin {
@@ -14,7 +16,7 @@ impl Plugin for BackgroundPlugin {
             (
                 setup_channel,
                 // Ensure the channel is set up before spawning tasks.
-                spawn_task.after(setup_channel),
+                spawn_task.after(setup_channel)
             ),
         );
     }
@@ -100,6 +102,11 @@ struct GenerationResponse {
 }
 
 fn spawn_task(channel: Res<MessageChannel>) {
+
+    if !BACKGROUND_ACTIVE {
+        return
+    }
+
     let pool = IoTaskPool::get();
 
     let _sender = channel.sender.clone();

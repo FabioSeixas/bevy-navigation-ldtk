@@ -44,7 +44,8 @@ enum PathfinderStatus {
 
 impl Pathfinder {
     pub fn new(start: &GridPosition, goal: &GridPosition) -> Self {
-        let h = Pathfinder::calculate_heuristic(&start, &goal);
+        // let h = Pathfinder::calculate_heuristic(&start, &goal);
+        let h = start.calc_distance(&goal);
 
         let start_node = PathNode {
             g: 0.,
@@ -64,9 +65,14 @@ impl Pathfinder {
             status: PathfinderStatus::Calculating(0),
         }
     }
-    fn calculate_heuristic(pos1: &GridPosition, pos2: &GridPosition) -> f32 {
-        ((pos2.x - pos1.x).pow(2) as f32 + ((pos2.y - pos1.y).pow(2) as f32)).sqrt()
-    }
+    // fn calculate_heuristic(pos1: &GridPosition, pos2: &GridPosition) -> f32 {
+    //     ((pos2.x - pos1.x).pow(2) as f32 + ((pos2.y - pos1.y).pow(2) as f32)).sqrt()
+    // }
+    // fn calculate_heuristic(a: &GridPosition, b: &GridPosition) -> f32 {
+    //     let dx = (b.x - a.x) as f32;
+    //     let dy = (b.y - a.y) as f32;
+    //     (dx * dx + dy * dy).sqrt()
+    // }
 
     fn get_nearby(reference_position: &GridPosition) -> Vec<GridPosition> {
         let mut nearby = Vec::new();
@@ -174,9 +180,11 @@ impl Pathfinder {
                 continue;
             }
 
-            let tentative_g = current.g + Pathfinder::calculate_heuristic(&current.position, &pos);
+            // let tentative_g = current.g + Pathfinder::calculate_heuristic(&current.position, &pos);
+            let tentative_g = current.g + current.position.calc_distance(&pos);
 
-            let h = Pathfinder::calculate_heuristic(&pos, &self.goal);
+            // let h = Pathfinder::calculate_heuristic(&pos, &self.goal);
+            let h = pos.calc_distance(&self.goal);
 
             // already exists in open?
             if let Some(nei) = self.open_list.iter_mut().find(|n| n.position == pos) {
