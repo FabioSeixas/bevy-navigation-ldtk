@@ -25,6 +25,7 @@ impl Plugin for AgentPlugin {
             .add_systems(
                 Update,
                 (
+                    update_agents_needs_system,
                     movement_agent,
                     check_agent_pathfinding,
                     spawn_agent_system,
@@ -76,7 +77,10 @@ fn spawn_agent_system(
                                     .id();
 
                                 commands.spawn((
-                                    Agent { pathfinding_entity, hungry: 0. },
+                                    Agent {
+                                        pathfinding_entity,
+                                        hungry: 0.,
+                                    },
                                     grid_pos,
                                     Sprite::from_atlas_image(
                                         character_sprite_sheet.texture.clone(),
@@ -113,6 +117,16 @@ fn spawn_agent_system(
 pub struct Agent {
     pathfinding_entity: Entity,
     hungry: f32,
+}
+
+impl Agent {
+    pub fn is_hungry(&self) -> bool {
+        self.hungry > 1000.
+    }
+
+    pub fn fill_hungry(&mut self) {
+        self.hungry = 0.
+    }
 }
 
 fn update_agents_needs_system(mut q_agents: Query<&mut Agent>) {

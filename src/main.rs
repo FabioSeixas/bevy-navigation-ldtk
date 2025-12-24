@@ -9,15 +9,17 @@ mod pathfinder;
 mod roof;
 mod world;
 mod walk;
+mod consume;
 
 use agent::{Agent, AgentPlugin};
 use animation::AnimationPlugin;
 use background::BackgroundPlugin;
-use bevy::{color::palettes::css::*, prelude::*};
+use bevy::{color::palettes::css::*, log::LogPlugin, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
 use brain::*;
 use walk::*;
+use consume::*;
 use constants::*;
 use message_animation::MessageAnimationPlugin;
 use roof::RoofPlugin;
@@ -25,7 +27,10 @@ use world::{components::*, grid::*, plugin::*, spatial_idx::*};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()).set(LogPlugin {
+            level: bevy::log::Level::INFO,
+            ..Default::default()
+        }))
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
@@ -33,6 +38,7 @@ fn main() {
         .add_plugins(WorldPlugin)
         .add_plugins(BackgroundPlugin)
         .add_plugins(WalkPlugin)
+        .add_plugins(ConsumePlugin)
         .add_plugins(AnimationPlugin)
         .add_plugins(MessageAnimationPlugin)
         .init_resource::<GizmoConfigStore>()

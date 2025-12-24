@@ -15,7 +15,7 @@ pub struct WalkPlugin;
 impl Plugin for WalkPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(define_random_destination)
-            .add_systems(Update, walking_action_system);
+            .add_systems(PreUpdate, walking_action_system.in_set(BigBrainSet::Actions));
     }
 }
 
@@ -53,23 +53,21 @@ fn walking_action_system(
 
         match *state {
             ActionState::Requested => {
-                debug!("Time to walk for relax!");
-
                 if let Some(destination) = &walk_action.destination {
+                    info!("Walking to defined destination");
                     commands.entity(entity).insert(Walking {
                         destination: destination.clone(),
                     });
                 } else {
+                    info!("Walking to random destination");
                     commands.trigger(DefineRandomDestination { entity });
                 };
                 *state = ActionState::Executing;
             }
             ActionState::Executing => {
-                trace!("Walking...");
-
                 if let Ok((walking, grid_position)) = agent_q.get(entity) {
                     if grid_position.eq(&walking.destination) {
-                        debug!("Done walking");
+                        info!("Done walking");
                         commands.entity(entity).remove::<Walking>();
                         *state = ActionState::Success;
                     }
@@ -77,7 +75,7 @@ fn walking_action_system(
             }
             // All Actions should make sure to handle cancellations!
             ActionState::Cancelled => {
-                debug!("Action was cancelled. Considering this a failure.");
+                info!("Walking was cancelled");
                 *state = ActionState::Failure;
             }
             _ => {}

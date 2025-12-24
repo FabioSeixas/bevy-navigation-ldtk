@@ -5,7 +5,7 @@ pub const GRID_HEIGHT: i32 = 64;
 pub const AGENT_Z_VALUE: f32 = 20.;
 pub const PATHFINDER_Z_VALUE: f32 = 10.;
 
-pub const AGENTS_COUNT: i32 = 50;
+pub const AGENTS_COUNT: i32 = 5;
 
 pub const PATHFINDER_MAX_DEPTH: usize = 100;
 
