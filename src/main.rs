@@ -1,6 +1,7 @@
 mod agent;
 mod animation;
 mod background;
+mod brain;
 mod constants;
 mod events;
 mod message_animation;
@@ -14,6 +15,7 @@ use background::BackgroundPlugin;
 use bevy::{color::palettes::css::*, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
+use brain::*;
 use constants::*;
 use message_animation::MessageAnimationPlugin;
 use roof::RoofPlugin;
@@ -25,6 +27,7 @@ fn main() {
         .add_plugins(LdtkPlugin)
         .add_plugins(AgentPlugin)
         .add_plugins(RoofPlugin)
+        .add_plugins(BrainPlugin)
         .add_plugins(WorldPlugin)
         .add_plugins(BackgroundPlugin)
         .add_plugins(AnimationPlugin)
@@ -43,7 +46,6 @@ fn main() {
         )
         .run();
 }
-
 
 // TilemapBundle
 fn debug(query: Query<(Entity, &TilePos, &Transform, &TileColor)>) {

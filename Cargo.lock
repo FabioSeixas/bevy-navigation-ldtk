@@ -1568,6 +1568,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "big-brain"
+version = "0.23.0"
+source = "git+https://github.com/fabioseixas/big-brain.git?branch=main#faf1a973588a516da4005dcc6d2ebf88212a4d30"
+dependencies = [
+ "bevy",
+ "big-brain-derive",
+]
+
+[[package]]
+name = "big-brain-derive"
+version = "0.23.0"
+source = "git+https://github.com/fabioseixas/big-brain.git?branch=main#faf1a973588a516da4005dcc6d2ebf88212a4d30"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.66.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3405,6 +3424,7 @@ dependencies = [
  "bevy",
  "bevy_ecs_ldtk",
  "bevy_ecs_tilemap",
+ "big-brain",
  "bitflags 2.10.0",
  "crossbeam-channel",
  "ehttp",

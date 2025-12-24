@@ -21,10 +21,10 @@ impl Plugin for AgentPlugin {
             .add_observer(update_pathfinding_curr_step)
             .add_observer(pathfinding_finish_path_step)
             .add_observer(update_agent_position)
+            .add_observer(define_random_destination)
             .add_systems(
                 Update,
                 (
-                    define_destination_system,
                     check_reach_destination_system,
                     movement_agent,
                     check_agent_pathfinding,
@@ -161,29 +161,33 @@ fn spawn_agent_system(
     }
 }
 
-fn define_destination_system(
-    mut query: Query<Entity, (Without<Walking>, With<Agent>)>,
+#[derive(Event, Debug)]
+pub struct DefineRandomDestination {
+    pub entity: Entity,
+}
+
+fn define_random_destination(
+    event: On<DefineRandomDestination>,
     tile_query: Query<&Tile, Without<Occupied>>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
-    for agent_entity in &mut query {
-        let mut chosen_destination_pos: Option<GridPosition> = None;
-        while chosen_destination_pos.is_none() {
-            let pos = Grid::get_random_position();
-            if let Some(tile_data) = spatial_idx.map.get(&(pos.x, pos.y)) {
-                if tile_data.is_valid_destination() {
-                    if let Ok(_) = tile_query.get(tile_data.entity) {
-                        chosen_destination_pos = Some(pos);
-                    }
+    let agent_entity = event.entity;
+    let mut chosen_destination_pos: Option<GridPosition> = None;
+    while chosen_destination_pos.is_none() {
+        let pos = Grid::get_random_position();
+        if let Some(tile_data) = spatial_idx.map.get(&(pos.x, pos.y)) {
+            if tile_data.is_valid_destination() {
+                if let Ok(_) = tile_query.get(tile_data.entity) {
+                    chosen_destination_pos = Some(pos);
                 }
             }
         }
-        if let Some(destination_pos) = chosen_destination_pos {
-            commands.entity(agent_entity).insert(Walking {
-                destination: destination_pos,
-            });
-        }
+    }
+    if let Some(destination_pos) = chosen_destination_pos {
+        commands.entity(agent_entity).insert(Walking {
+            destination: destination_pos,
+        });
     }
 }
 
