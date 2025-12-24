@@ -38,10 +38,87 @@ impl Plugin for AgentPlugin {
 #[derive(Resource)]
 struct SpawnAgentTimer(Timer);
 
+fn spawn_agent_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    timer: Option<ResMut<SpawnAgentTimer>>,
+    query: Query<&GridPosition, (With<Tile>, Without<Occupied>)>,
+    spatial_idx: Res<SpatialIndex>,
+    character_sprite_sheet: Res<CharacterSpriteSheet>,
+    animations: Res<CharacterAnimations>,
+) {
+    if let Some(mut timer) = timer {
+        if timer.0.tick(time.delta()).just_finished() {
+            for _ in 0..AGENTS_COUNT {
+                let mut done = false;
+                while !done {
+                    let grid_pos = Grid::get_random_position();
+                    if let Some(tile_data) = spatial_idx.map.get(&(grid_pos.x, grid_pos.y)) {
+                        if tile_data.is_outside() {
+                            if let Ok(_) = query.get(tile_data.entity) {
+                                done = true;
+                                let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
+                                let pathfinding_entity = commands
+                                    .spawn((
+                                        AgentPathfinding::default(),
+                                        grid_pos.clone(),
+                                        Sprite {
+                                            color: Color::srgb(1.0, 1.2, 1.2),
+                                            custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
+                                            ..default()
+                                        },
+                                        Transform::from_translation(Vec3 {
+                                            x: pos.x,
+                                            y: pos.y,
+                                            z: PATHFINDER_Z_VALUE,
+                                        }),
+                                    ))
+                                    .id();
+
+                                commands.spawn((
+                                    Agent { pathfinding_entity, hungry: 0. },
+                                    grid_pos,
+                                    Sprite::from_atlas_image(
+                                        character_sprite_sheet.texture.clone(),
+                                        TextureAtlas {
+                                            layout: character_sprite_sheet
+                                                .texture_atlas_layout
+                                                .clone(),
+                                            index: animations.walk_down.first,
+                                        },
+                                    ),
+                                    Anchor::BOTTOM_CENTER,
+                                    Transform::from_translation(Vec3 {
+                                        x: pos.x,
+                                        y: pos.y,
+                                        z: AGENT_Z_VALUE,
+                                    })
+                                    .with_scale(Vec3::splat(0.8)),
+                                    animations.walk_down,
+                                    AnimationDirection::Down,
+                                    AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            commands.remove_resource::<SpawnAgentTimer>();
+        }
+    }
+}
+
 /// Marker for the agent
 #[derive(Component)]
 pub struct Agent {
     pathfinding_entity: Entity,
+    hungry: f32,
+}
+
+fn update_agents_needs_system(mut q_agents: Query<&mut Agent>) {
+    for mut agent in &mut q_agents {
+        agent.hungry += 1.;
+    }
 }
 
 #[derive(Component, Default)]
@@ -83,76 +160,6 @@ pub struct AgentCurrentPath {
 pub enum AgentCurrentPathStatus {
     WaitingNextStep((usize, usize)), // (step_idx, retry_count)
     RunningStep(usize),
-}
-
-fn spawn_agent_system(
-    mut commands: Commands,
-    time: Res<Time>,
-    timer: Option<ResMut<SpawnAgentTimer>>,
-    query: Query<&GridPosition, (With<Tile>, Without<Occupied>)>,
-    spatial_idx: Res<SpatialIndex>,
-    character_sprite_sheet: Res<CharacterSpriteSheet>,
-    animations: Res<CharacterAnimations>,
-) {
-    if let Some(mut timer) = timer {
-        if timer.0.tick(time.delta()).just_finished() {
-            for _ in 0..AGENTS_COUNT {
-                let mut done = false;
-                while !done {
-                    let grid_pos = Grid::get_random_position();
-                    if let Some(tile_data) = spatial_idx.map.get(&(grid_pos.x, grid_pos.y)) {
-                        if tile_data.is_outside() {
-                            if let Ok(_) = query.get(tile_data.entity) {
-                                done = true;
-                                let pos = Grid::grid_to_world(grid_pos.x, grid_pos.y);
-                                let pathfinding_entity = commands
-                                    .spawn((
-                                        AgentPathfinding::default(),
-                                        grid_pos.clone(),
-                                        Sprite {
-                                            color: Color::srgb(1.0, 1.2, 1.2),
-                                            custom_size: Some(Vec2::splat(TILE_SIZE - 2.0)),
-                                            ..default()
-                                        },
-                                        Transform::from_translation(Vec3 {
-                                            x: pos.x,
-                                            y: pos.y,
-                                            z: PATHFINDER_Z_VALUE,
-                                        }),
-                                    ))
-                                    .id();
-
-                                commands.spawn((
-                                    Agent { pathfinding_entity },
-                                    grid_pos,
-                                    Sprite::from_atlas_image(
-                                        character_sprite_sheet.texture.clone(),
-                                        TextureAtlas {
-                                            layout: character_sprite_sheet
-                                                .texture_atlas_layout
-                                                .clone(),
-                                            index: animations.walk_down.first,
-                                        },
-                                    ),
-                                    Anchor::BOTTOM_CENTER,
-                                    Transform::from_translation(Vec3 {
-                                        x: pos.x,
-                                        y: pos.y,
-                                        z: AGENT_Z_VALUE,
-                                    })
-                                    .with_scale(Vec3::splat(0.8)),
-                                    animations.walk_down,
-                                    AnimationDirection::Down,
-                                    AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            commands.remove_resource::<SpawnAgentTimer>();
-        }
-    }
 }
 
 #[derive(Default)]
