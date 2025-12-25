@@ -63,6 +63,7 @@ pub fn get_close_to_entity_action_system(
                     agent_q.get(source_entity)
                 {
                     if let Some(walking) = maybe_walking {
+                        // TODO: check if target moved, so start again
                         if source_current_position.eq(&walking.destination) {
                             info!("Done walking");
 

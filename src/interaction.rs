@@ -3,7 +3,7 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
-    brain::InterruptCurrentTaskEvent,
+    brain::events::InterruptCurrentTaskEvent,
     interaction_queue::{AgentInteractionItem, AgentInteractionQueue},
     walk::components::GetCloseToEntity,
     world::components::GridPosition,
@@ -72,6 +72,50 @@ fn check_interaction_wait_timeout(
         }
     }
 }
+
+// fn check_agent_interaction_queue_system(
+//     mut query: Query<
+//         (Option<&mut ActionComponent>, &mut AgentInteractionQueue),
+//         (Without<ActiveInteraction>, Without<WaitingAsTarget>),
+//     >,
+//     mut interaction_query: Query<(&mut InteractionState, &Interaction)>,
+//     mut commands: Commands,
+// ) {
+//     for (maybe_action, mut agent_interation_queue) in &mut query {
+//         if !agent_interation_queue.is_empty() {
+//             if let Some(interaction_item) = agent_interation_queue.pop_first() {
+//                 if let Ok((mut interaction_state, interaction)) =
+//                     interaction_query.get_mut(interaction_item.interaction_entity)
+//                 {
+//                     println!(
+//                         "Interaction between {} and {} is received by target",
+//                         interaction_item.source, interaction_item.target
+//                     );
+//
+//                     let (_, target_label) = interaction.get_kind_labels();
+//
+//                     commands
+//                         .entity(interaction_item.target)
+//                         .insert(WaitingAsTarget)
+//                         .trigger(UpdateText {
+//                             content: format!("{} WaitingAsTarget", target_label),
+//                         });
+//
+//                     if let Some(mut action) = maybe_action {
+//                         action.pause();
+//                     }
+//
+//                     *interaction_state = InteractionState::TargetWaitingForSource {
+//                         timeout: Timer::from_seconds(10., TimerMode::Once),
+//                     };
+//
+//                     // only one agent will be able to receive an interaction by frame
+//                     break;
+//                 }
+//             };
+//         }
+//     }
+// }
 
 #[derive(Clone, Component, Debug, ActionBuilder)]
 pub struct StartInteractionAction;

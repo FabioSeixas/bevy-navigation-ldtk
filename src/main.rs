@@ -19,7 +19,7 @@ use background::BackgroundPlugin;
 use bevy::{color::palettes::css::*, log::LogPlugin, prelude::*};
 use bevy_ecs_ldtk::prelude::*;
 use bevy_ecs_tilemap::tiles::{TileColor, TilePos};
-use brain::*;
+use brain::plugin::BrainPlugin;
 use constants::*;
 use consume::*;
 use interaction::InteractionPlugin;
