@@ -3,6 +3,7 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
+    brain::InterruptCurrentTaskEvent,
     interaction_queue::{AgentInteractionItem, AgentInteractionQueue},
     walk::components::GetCloseToEntity,
     world::components::GridPosition,
@@ -36,6 +37,10 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
+
+                    commands.trigger(InterruptCurrentTaskEvent {
+                        entity: interaction.source,
+                    });
                 };
             }
             InteractionState::TargetWaitingForSource { timeout } => {
@@ -194,7 +199,7 @@ fn start_interaction_action_system(
                 // Confirm that Agent is not already source in some interaction
                 for interaction in interaction_q {
                     if interaction.source.eq(&source_entity) {
-                        info!("Agent is already source in another interaction");
+                        // info!("Agent is already source in another interaction");
                         *state = ActionState::Failure;
                         return;
                     }

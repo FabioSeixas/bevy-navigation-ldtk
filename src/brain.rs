@@ -15,16 +15,21 @@ pub struct BrainPlugin;
 impl Plugin for BrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(BigBrainPlugin::new(PreUpdate))
+            .add_observer(interrupt_current_task_observer)
             .add_systems(
                 PreUpdate,
                 (
                     hungry_scorer_system,
                     relax_scorer_system,
                     talk_scorer_system,
+                    interrupt_current_task_scorer_system,
                 )
                     .in_set(BigBrainSet::Scorers),
             )
-            .add_systems(Update, attach_main_thinker_to_agents);
+            .add_systems(
+                Update,
+                (attach_main_thinker_to_agents, interrupt_action_system),
+            );
     }
 }
 
@@ -37,15 +42,17 @@ fn attach_main_thinker_to_agents(
         commands.entity(entity).insert(
             Thinker::build()
                 .label("Main Thinker")
-                // Priority 1: Handle urgent needs with `When`. This will INTERRUPT other tasks.
+                // Priority 1: Will force the cancelation of anything running right now
+                .when(InterruptCurrentTaskScorer, InterruptCurrentTaskAction)
+                // Priority 2:
                 .when(
-                    Hungry,
+                    HungryScorer,
                     Steps::build()
                         .label("WalkAndConsume")
                         .step(WalkingAction::destination(hungry_location.clone()))
                         .step(ConsumeAction::new()),
                 )
-                // Priority 2: Normal, scored behaviors. `pick` runs the action with the highest score.
+                // Priority 3: Normal, scored behaviors. `pick` runs the action with the highest score.
                 .picker(Highest)
                 // .when(RelaxScorer, WalkingAction::random_destination())
                 .when(
@@ -59,12 +66,63 @@ fn attach_main_thinker_to_agents(
     }
 }
 
-#[derive(Clone, Component, Debug, ScorerBuilder)]
-pub struct Hungry;
+#[derive(Clone, Component, Debug)]
+pub struct InterruptCurrentTaskMarker;
 
-pub fn hungry_scorer_system(
+#[derive(Event)]
+pub struct InterruptCurrentTaskEvent {
+    pub entity: Entity,
+}
+
+fn interrupt_current_task_observer(event: On<InterruptCurrentTaskEvent>, mut commands: Commands) {
+    commands
+        .entity(event.entity)
+        .insert(InterruptCurrentTaskMarker);
+}
+
+#[derive(Clone, Component, Debug, ScorerBuilder)]
+struct InterruptCurrentTaskScorer;
+
+fn interrupt_current_task_scorer_system(
+    agent_q: Query<Entity, With<InterruptCurrentTaskMarker>>,
+    mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<InterruptCurrentTaskScorer>>,
+    mut commands: Commands,
+) {
+    for (Actor(actor), mut score, span) in &mut query {
+        if let Ok(entity) = agent_q.get(*actor) {
+            info!("Interrupting current action");
+
+            score.set(1.);
+
+            commands
+                .entity(entity)
+                .remove::<InterruptCurrentTaskMarker>();
+        } else {
+            score.set(0.)
+        }
+    }
+}
+
+#[derive(Clone, Component, Debug, ActionBuilder)]
+pub struct InterruptCurrentTaskAction;
+
+fn interrupt_action_system(mut query: Query<(&mut ActionState, &InterruptCurrentTaskAction)>) {
+    for (mut state, _) in &mut query {
+        match *state {
+            ActionState::Requested => {
+                *state = ActionState::Success;
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Clone, Component, Debug, ScorerBuilder)]
+struct HungryScorer;
+
+fn hungry_scorer_system(
     agent_q: Query<&Agent>,
-    mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<Hungry>>,
+    mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<HungryScorer>>,
 ) {
     for (Actor(actor), mut score, span) in &mut query {
         if let Ok(agent) = agent_q.get(*actor) {
