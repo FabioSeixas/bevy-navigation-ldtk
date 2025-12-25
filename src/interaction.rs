@@ -119,6 +119,7 @@ fn start_interaction(
 }
 
 fn start_interaction_action_system(
+    interaction_q: Query<&Interaction>,
     source_agent_q: Query<&GridPosition, With<Agent>>,
     target_agent_q: Query<(Entity, &GridPosition), With<Agent>>,
     mut query: Query<(
@@ -132,17 +133,27 @@ fn start_interaction_action_system(
     for (Actor(actor), mut state, _, span) in &mut query {
         let _guard = span.span().enter();
 
+        let source_entity = *actor;
+
         match *state {
             ActionState::Requested => {
-                if let Ok(source_position) = source_agent_q.get(*actor) {
+                // Confirm that Agent is not already source in some interaction
+                for interaction in interaction_q {
+                    if interaction.source.eq(&source_entity) {
+                        info!("Agent is already source in another interaction");
+                        *state = ActionState::Failure;
+                    }
+                }
+
+                if let Ok(source_position) = source_agent_q.get(source_entity) {
                     // This code is starting interaction with a random agent
                     // Not generic enough to be used to start other types of interactions
                     if let Some((target_entity, _, _)) =
-                        find_agent_near(*actor, source_position.clone(), target_agent_q)
+                        find_agent_near(source_entity, source_position.clone(), target_agent_q)
                     {
                         commands.trigger(StartInteraction {
                             // kind: InteractionKind::Trade,
-                            source: *actor,
+                            source: source_entity,
                             target: target_entity,
                         });
                         *state = ActionState::Success;

@@ -7,7 +7,7 @@ use crate::{
     world::components::GridPosition,
 };
 
-pub fn get_close_to_action_system(
+pub fn get_close_to_entity_action_system(
     agent_q: Query<(&GridPosition, Option<&Walking>, Option<&GetCloseToEntity>), With<Agent>>,
     target_agent_q: Query<&GridPosition, With<Agent>>,
     mut query: Query<(&Actor, &mut ActionState, &GetCloseToEntityAction, &ActionSpan)>,
