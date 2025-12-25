@@ -31,8 +31,8 @@ fn check_interaction_wait_timeout(
             InteractionState::SourceWaitingForTarget { timeout } => {
                 if timeout.tick(time.delta()).just_finished() {
                     info!(
-                        "Interaction between {} and {} timed out (SourceWaitingForTarget)",
-                        interaction.source, interaction.target
+                        "Interaction {} between {} and {} timed out (SourceWaitingForTarget)",
+                        entity, interaction.source, interaction.target
                     );
 
                     commands.entity(entity).despawn();
@@ -41,8 +41,8 @@ fn check_interaction_wait_timeout(
             InteractionState::TargetWaitingForSource { timeout } => {
                 if timeout.tick(time.delta()).just_finished() {
                     info!(
-                        "Interaction between {} and {} timed out (TargetWaitingForSource)",
-                        interaction.source, interaction.target
+                        "Interaction {} between {} and {} timed out (TargetWaitingForSource)",
+                        entity, interaction.source, interaction.target
                     );
 
                     commands.entity(entity).despawn();
@@ -147,6 +147,11 @@ fn start_interaction(
             ))
             .id();
 
+        info!(
+            "interaction {} between {} and {} started",
+            interaction_entity, trigger.source, trigger.target
+        );
+
         // let text = match trigger.kind {
         //     InteractionKind::Talk => "Talking",
         //     InteractionKind::Trade => "Buying",
@@ -191,6 +196,7 @@ fn start_interaction_action_system(
                     if interaction.source.eq(&source_entity) {
                         info!("Agent is already source in another interaction");
                         *state = ActionState::Failure;
+                        return;
                     }
                 }
 
