@@ -96,7 +96,7 @@ pub struct SpatialIndex {
 }
 
 impl SpatialIndex {
-    pub fn get_entity_data(&self, x: i32, y: i32) -> Option<TileData> {
+    pub fn get_tile_data(&self, x: i32, y: i32) -> Option<TileData> {
         // println!("get_entity: {} {}", x, y);
         match self.map.get(&(x, y)) {
             Some(data) => Some(*data),

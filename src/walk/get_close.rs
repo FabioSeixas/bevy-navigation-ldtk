@@ -3,14 +3,20 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
-    walk::components::{GetCloseToEntityAction, GetCloseToEntity, Walking},
-    world::components::GridPosition,
+    walk::components::{GetCloseToEntity, GetCloseToEntityAction, Walking},
+    world::{components::GridPosition, spatial_idx::SpatialIndex},
 };
 
 pub fn get_close_to_entity_action_system(
     agent_q: Query<(&GridPosition, Option<&Walking>, Option<&GetCloseToEntity>), With<Agent>>,
     target_agent_q: Query<&GridPosition, With<Agent>>,
-    mut query: Query<(&Actor, &mut ActionState, &GetCloseToEntityAction, &ActionSpan)>,
+    mut query: Query<(
+        &Actor,
+        &mut ActionState,
+        &GetCloseToEntityAction,
+        &ActionSpan,
+    )>,
+    spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
     for (Actor(actor), mut state, _get_close_to_action, span) in &mut query {
@@ -20,17 +26,26 @@ pub fn get_close_to_entity_action_system(
 
         match *state {
             ActionState::Requested => {
-                if let Ok((_, _, maybe_get_close_to_entity)) = agent_q.get(source_entity) {
+                if let Ok((source_current_position, _, maybe_get_close_to_entity)) =
+                    agent_q.get(source_entity)
+                {
                     if let Some(get_close_to_entity) = maybe_get_close_to_entity {
                         if let Ok(target_position) = target_agent_q.get(get_close_to_entity.entity)
                         {
-                            // FIX: destination can not be the same point as target. It must be:
-                            // 1) an adjacent point
-                            // 2) a valid point (not wall, not door, not furniture)
-                            commands.entity(source_entity).insert(Walking {
-                                destination: target_position.clone(),
-                            });
-                            *state = ActionState::Executing;
+                            for destination_option in
+                                source_current_position.get_ordered_neighbors(target_position)
+                            {
+                                if let Some(tile_data) = spatial_idx
+                                    .get_tile_data(destination_option.x, destination_option.y)
+                                {
+                                    if tile_data.is_valid_destination() {
+                                        commands.entity(source_entity).insert(Walking {
+                                            destination: destination_option
+                                        });
+                                        *state = ActionState::Executing;
+                                    }
+                                }
+                            }
                         } else {
                             info!("Target not found");
                             *state = ActionState::Failure;
@@ -76,7 +91,7 @@ pub fn get_close_to_entity_action_system(
                 }
             }
             ActionState::Cancelled => {
-                info!("GetCloseToAction was cancelled");
+                info!("GetCloseToEntityAction was cancelled");
                 *state = ActionState::Failure;
             }
             ActionState::Failure => {

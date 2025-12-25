@@ -78,14 +78,14 @@ fn roof_opacity_system(
 
     // 1. Determine base transparency for tiles under roofs/insides based on agent positions.
     for agent_pos in &agents_q {
-        if let Some(tile_data) = spatial_idx.get_entity_data(agent_pos.x, agent_pos.y) {
+        if let Some(tile_data) = spatial_idx.get_tile_data(agent_pos.x, agent_pos.y) {
             if let Some(strategy) = can_be_transparent(&tile_data) {
                 let opacity = strategy.opacity();
                 let radius = strategy.radius();
 
                 for x in (agent_pos.x.saturating_sub(radius))..=(agent_pos.x + radius) {
                     for y in (agent_pos.y.saturating_sub(radius))..=(agent_pos.y + radius) {
-                        if let Some(neighbor_tile_data) = spatial_idx.get_entity_data(x, y) {
+                        if let Some(neighbor_tile_data) = spatial_idx.get_tile_data(x, y) {
                             if strategy.should_affect_neighbor(&neighbor_tile_data) {
                                 let pos = (x, y);
                                 let current_alpha =
@@ -112,7 +112,7 @@ fn roof_opacity_system(
                     continue;
                 }
 
-                if let Some(tile_data) = spatial_idx.get_entity_data(nx, ny) {
+                if let Some(tile_data) = spatial_idx.get_tile_data(nx, ny) {
                     if tile_data.is_wall() {
                         let wall_pos = (nx, ny);
                         let current_alpha =
@@ -128,7 +128,7 @@ fn roof_opacity_system(
     for (tilemap_id, tile_pos, mut tile_color) in &mut tiles_q {
         let pos = (tile_pos.x as i32, tile_pos.y as i32);
 
-        if let Some(tile_data) = spatial_idx.get_entity_data(pos.0, pos.1) {
+        if let Some(tile_data) = spatial_idx.get_tile_data(pos.0, pos.1) {
             if tile_data.is_building() {
                 if Some(tilemap_id.0) == tile_data.tilemap_entity {
                     let target_alpha = *transparent_tiles.get(&pos).unwrap_or(&OPAQUE_ALPHA);

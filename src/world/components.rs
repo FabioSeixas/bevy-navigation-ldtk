@@ -40,9 +40,38 @@ impl GridPosition {
         (dx * dx + dy * dy).sqrt()
     }
 
-    // TODO: implement 
     pub fn is_adjacent(&self, reference: &GridPosition) -> bool {
-        true
+        let dx = (self.x - reference.x).abs();
+        let dy = (self.y - reference.y).abs();
+
+        // Exclude the same cell, include 8-direction adjacency
+        dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
+    }
+
+    pub fn get_ordered_neighbors(&self, reference: &GridPosition) -> Vec<GridPosition> {
+        let mut neighbors = Vec::with_capacity(8);
+
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+
+                neighbors.push(GridPosition {
+                    x: reference.x + dx,
+                    y: reference.y + dy,
+                });
+            }
+        }
+
+        neighbors.sort_by(|a, b| {
+            reference
+                .calc_distance(a)
+                .partial_cmp(&reference.calc_distance(b))
+                .unwrap()
+        });
+
+        neighbors
     }
 }
 

@@ -12,10 +12,59 @@ pub struct InteractionPlugin;
 
 impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(start_interaction).add_systems(
-            PreUpdate,
-            start_interaction_action_system.in_set(BigBrainSet::Actions),
-        );
+        app.add_observer(start_interaction)
+            .add_systems(
+                PreUpdate,
+                start_interaction_action_system.in_set(BigBrainSet::Actions),
+            )
+            .add_systems(Update, check_interaction_wait_timeout);
+    }
+}
+
+fn check_interaction_wait_timeout(
+    mut query: Query<(Entity, &Interaction, &mut InteractionState)>,
+    mut commands: Commands,
+    time: Res<Time>,
+) {
+    for (entity, interaction, mut interaction_state) in &mut query {
+        match interaction_state.as_mut() {
+            InteractionState::SourceWaitingForTarget { timeout } => {
+                if timeout.tick(time.delta()).just_finished() {
+                    info!(
+                        "Interaction between {} and {} timed out (SourceWaitingForTarget)",
+                        interaction.source, interaction.target
+                    );
+
+                    commands.entity(entity).despawn();
+                };
+            }
+            InteractionState::TargetWaitingForSource { timeout } => {
+                if timeout.tick(time.delta()).just_finished() {
+                    info!(
+                        "Interaction between {} and {} timed out (TargetWaitingForSource)",
+                        interaction.source, interaction.target
+                    );
+
+                    commands.entity(entity).despawn();
+                };
+            }
+            InteractionState::Active { duration } => {
+                if duration.tick(time.delta()).just_finished() {
+                    commands.entity(entity).despawn();
+                };
+            }
+            InteractionState::Running { duration } => {
+                if duration.tick(time.delta()).just_finished() {
+                    commands.entity(entity).despawn();
+                } else {
+                    // println!("Running interaction: {:?}", duration.elapsed());
+                };
+            }
+            InteractionState::Finished(result) => {
+                info!("Finish interaction: {:?} with result {:?}", entity, result);
+                commands.entity(entity).despawn();
+            }
+        }
     }
 }
 
