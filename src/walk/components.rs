@@ -37,10 +37,7 @@ impl GetCloseToEntity {
     pub fn new(target: Entity) -> Self {
         Self {
             target,
-            recalculate_timer: Timer::new(Duration::from_secs(3), TimerMode::Repeating),
+            recalculate_timer: Timer::new(Duration::from_secs(5), TimerMode::Repeating),
         }
     }
 }
-
-#[derive(Clone, Component, Debug, ActionBuilder)]
-pub struct GetCloseToEntityAction;

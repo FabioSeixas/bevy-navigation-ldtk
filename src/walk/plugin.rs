@@ -2,10 +2,7 @@ use bevy::prelude::*;
 use big_brain::prelude::*;
 
 use crate::walk::{
-    get_close::{
-        clean_get_close_to_entity_observer, get_close_to_entity_system,
-        tick_get_close_to_entity_system,
-    },
+    get_close::*,
     walk::{define_random_destination, walking_action_system},
 };
 
@@ -21,7 +18,11 @@ impl Plugin for WalkPlugin {
             )
             .add_systems(
                 Update,
-                (get_close_to_entity_system, tick_get_close_to_entity_system),
+                (
+                    get_close_to_entity_walking_system,
+                    get_close_to_entity_not_walking_system,
+                    tick_get_close_to_entity_system,
+                ),
             );
     }
 }

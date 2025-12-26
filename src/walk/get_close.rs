@@ -27,81 +27,94 @@ pub fn clean_get_close_to_entity_observer(
     }
 }
 
-pub fn get_close_to_entity_system(
-    agent_q: Query<(Entity, &GridPosition, Option<&Walking>, &GetCloseToEntity), With<Agent>>,
+pub fn get_close_to_entity_walking_system(
+    agent_q: Query<(Entity, &GridPosition, &Walking, &GetCloseToEntity), With<Agent>>,
+    target_agent_q: Query<&GridPosition, With<Agent>>,
+    mut commands: Commands,
+) {
+    for (entity, source_current_position, walking, get_close_to_entity) in agent_q {
+        let mut clean_up = false;
+
+        // #########################################
+        // Agent Walking
+        // #########################################
+        if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
+            if target_position.is_adjacent(source_current_position) {
+                clean_up = true;
+            } else if source_current_position.eq(&walking.destination) {
+                custom_debug(
+                    entity,
+                    "get_close_to_entity_system",
+                    "Target moved, walking again".into(),
+                );
+
+                commands.entity(entity).remove::<Walking>();
+            } else if get_close_to_entity.recalculate_timer.is_finished() {
+                custom_debug(entity, "get_close_to_entity_system", "Recalculating".into());
+
+                commands.entity(entity).remove::<Walking>();
+            }
+        } else {
+            custom_debug(
+                entity,
+                "get_close_to_entity_system",
+                "Target not found".into(),
+            );
+            clean_up = true;
+        }
+
+        if clean_up {
+            custom_debug(entity, "get_close_to_entity_system", "clean up".into());
+            commands
+                .entity(entity)
+                .remove::<(Walking, GetCloseToEntity)>();
+        }
+    }
+}
+
+pub fn get_close_to_entity_not_walking_system(
+    agent_q: Query<(Entity, &GridPosition, &GetCloseToEntity), (With<Agent>, Without<Walking>)>,
     target_agent_q: Query<&GridPosition, With<Agent>>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
-    for (entity, source_current_position, maybe_walking, get_close_to_entity) in agent_q {
+    for (entity, source_current_position, get_close_to_entity) in agent_q {
         let mut clean_up = false;
-        if let Some(walking) = maybe_walking {
-            if source_current_position.eq(&walking.destination) {
-                custom_debug(entity, "get_close_to_entity_system", "Done walking".into());
 
-                // Check if target position still the same
-                if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
-                    if source_current_position.is_adjacent(target_position) {
-                        // success, clean everything
-                        clean_up = true;
-                    } else {
-                        custom_debug(
-                            entity,
-                            "get_close_to_entity_system",
-                            "Target moved, walking again".into(),
-                        );
-                        commands.entity(entity).remove::<Walking>();
-                    }
-                } else {
-                    custom_debug(
-                        entity,
-                        "get_close_to_entity_system",
-                        "Target not found".into(),
-                    );
-                    clean_up = true;
-                }
+        if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
+            if target_position.is_adjacent(source_current_position) {
+                clean_up = true;
             } else {
-                if get_close_to_entity.recalculate_timer.is_finished() {
-                    custom_debug(entity, "get_close_to_entity_system", "Recalculating".into());
-                    commands.entity(entity).remove::<Walking>();
-                }
-            }
-        } else {
-            if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
-                if target_position.is_adjacent(source_current_position) {
-                    clean_up = true;
-                } else {
-                    for destination_option in
-                        source_current_position.get_ordered_neighbors(target_position)
+                for destination_option in
+                    source_current_position.get_ordered_neighbors(target_position)
+                {
+                    if let Some(tile_data) =
+                        spatial_idx.get_tile_data(destination_option.x, destination_option.y)
                     {
-                        if let Some(tile_data) =
-                            spatial_idx.get_tile_data(destination_option.x, destination_option.y)
-                        {
-                            if tile_data.is_valid_destination() {
-                                custom_debug(
-                                    entity,
-                                    "get_close_to_entity_system",
-                                    "Start walking".into(),
-                                );
+                        if tile_data.is_valid_destination() {
+                            custom_debug(
+                                entity,
+                                "get_close_to_entity_system",
+                                "Start walking".into(),
+                            );
 
-                                commands.entity(entity).insert(Walking {
-                                    destination: destination_option,
-                                });
+                            commands.entity(entity).insert(Walking {
+                                destination: destination_option,
+                            });
 
-                                // break the for loop
-                                break;
-                            }
+                            // break the for loop
+                            break;
                         }
                     }
                 }
-            } else {
-                custom_debug(
-                    entity,
-                    "get_close_to_entity_system",
-                    "Target not found".into(),
-                );
-                clean_up = true;
             }
+        } else {
+            custom_debug(
+                entity,
+                "get_close_to_entity_system",
+                "Target not found".into(),
+            );
+            clean_up = true;
         }
 
         if clean_up {
