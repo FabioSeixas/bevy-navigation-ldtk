@@ -6,6 +6,7 @@ use crate::{
     agent::Agent,
     interaction::{ActivelyInteracting, WaitingAsTarget},
     interaction_queue::AgentInteractionQueue,
+    log::custom_debug,
 };
 
 #[derive(Clone, Component, Debug, ScorerBuilder)]
@@ -77,8 +78,18 @@ pub fn receive_interaction_scorer_system(
         // when not found (WaitingAsTarget is present) it will keep the last value used (I hope)
         if let Ok(agent_interaction_queue) = agent_q.get(*actor) {
             if agent_interaction_queue.is_empty() {
+                custom_debug(
+                    *actor,
+                    "receive_interaction_scorer_system",
+                    format!("queue is empty"),
+                );
                 score.set(0.);
             } else {
+                custom_debug(
+                    *actor,
+                    "receive_interaction_scorer_system",
+                    format!("queue is NOT empty"),
+                );
                 score.set(1.);
             }
         }

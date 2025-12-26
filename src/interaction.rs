@@ -238,11 +238,19 @@ fn receive_interaction_action_system(
                 }
             }
             ActionState::Cancelled => {
-                info!("receive interaction was cancelled");
+                custom_debug(
+                    entity,
+                    "receive_interaction_action_system",
+                    format!("Receive interaction was cancelled",),
+                );
                 *state = ActionState::Failure;
             }
             ActionState::Failure => {
-                info!("receive interaction failure");
+                custom_debug(
+                    entity,
+                    "receive_interaction_action_system",
+                    format!("Receive interaction finished",),
+                );
                 commands
                     .entity(entity)
                     .remove::<(WaitingAsTarget, ActivelyInteracting)>();
@@ -331,9 +339,13 @@ fn start_interaction(
             ))
             .id();
 
-        info!(
-            "interaction {} between {} and {} started",
-            interaction_entity, trigger.source, trigger.target
+        custom_debug(
+            interaction_entity,
+            "start_interaction",
+            format!(
+                "interaction {} between {} and {} started",
+                interaction_entity, trigger.source, trigger.target
+            ),
         );
 
         // let text = match trigger.kind {
@@ -424,28 +436,48 @@ fn start_interaction_action_system(
                         if let Ok(_) = interaction_q.get(waiting_as_source.0) {
                             // interaction running
                         } else {
-                            info!("Interaction not found while WaitingAsSource");
+                            custom_debug(
+                                source_entity,
+                                "start_interaction_action_system",
+                                format!("Interaction not found while WaitingAsSource"),
+                            );
                             *state = ActionState::Failure;
                         }
                     } else if let Some(actively_interacting) = maybe_actively_interacting {
                         if let Ok(_) = interaction_q.get(actively_interacting.0) {
                             // interaction running
                         } else {
-                            info!("Interaction not found while ActivelyInteracting");
+                            custom_debug(
+                                source_entity,
+                                "start_interaction_action_system",
+                                format!("Interaction not found while ActivelyInteracting"),
+                            );
                             *state = ActionState::Failure;
                         }
                     } else {
-                        info!("source is neither WaitingAsSource and ActivelyInteracting");
+                        custom_debug(
+                            source_entity,
+                            "start_interaction_action_system",
+                            format!("source is neither WaitingAsSource and ActivelyInteracting"),
+                        );
                         *state = ActionState::Failure;
                     }
                 }
             }
             ActionState::Cancelled => {
-                info!("start interaction was cancelled");
+                custom_debug(
+                    source_entity,
+                    "start_interaction_action_system",
+                    format!("action cancelled"),
+                );
                 *state = ActionState::Failure;
             }
             ActionState::Failure => {
-                info!("start interaction failure");
+                custom_debug(
+                    source_entity,
+                    "start_interaction_action_system",
+                    format!("action finished"),
+                );
                 commands
                     .entity(source_entity)
                     .remove::<(WaitingAsSource, ActivelyInteracting)>();
@@ -470,18 +502,22 @@ fn activate_pending_interactions(
                         if source_position.is_adjacent(target_position) {
                             should_start_interaction = true;
                         } else {
-                            info!(
-                                "TargetWaitingForSource: source not close enough. Target: {}. Source: {}.",
-                                interaction.target, interaction.source
-                            );
+                            // info!(
+                            //     "TargetWaitingForSource: source not close enough. Target: {}. Source: {}.",
+                            //     interaction.target, interaction.source
+                            // );
                         }
                     }
                 }
 
                 if should_start_interaction {
-                    info!(
-                        "Interaction {} between {} and {} is activating",
-                        interaction_entity, interaction.source, interaction.target
+                    custom_debug(
+                        interaction_entity,
+                        "activate_pending_interactions",
+                        format!(
+                            "Interaction {} between {} and {} is activating",
+                            interaction_entity, interaction.source, interaction.target
+                        ),
                     );
 
                     let active_interaction = ActivelyInteracting(interaction_entity);

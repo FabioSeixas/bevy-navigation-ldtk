@@ -77,33 +77,40 @@ fn spawn_agent_system(
                                     ))
                                     .id();
 
-                                commands.spawn((
-                                    Agent {
-                                        pathfinding_entity,
-                                        hungry: 0.,
-                                    },
-                                    AgentInteractionQueue::new(),
-                                    grid_pos,
-                                    Sprite::from_atlas_image(
-                                        character_sprite_sheet.texture.clone(),
-                                        TextureAtlas {
-                                            layout: character_sprite_sheet
-                                                .texture_atlas_layout
-                                                .clone(),
-                                            index: animations.walk_down.first,
+                                let agent_entity = commands
+                                    .spawn((
+                                        Agent {
+                                            pathfinding_entity,
+                                            hungry: 0.,
                                         },
-                                    ),
-                                    Anchor::BOTTOM_CENTER,
-                                    Transform::from_translation(Vec3 {
-                                        x: pos.x,
-                                        y: pos.y,
-                                        z: AGENT_Z_VALUE,
-                                    })
-                                    .with_scale(Vec3::splat(0.8)),
-                                    animations.walk_down,
-                                    AnimationDirection::Down,
-                                    AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
-                                ));
+                                        AgentInteractionQueue::new(),
+                                        grid_pos,
+                                        Sprite::from_atlas_image(
+                                            character_sprite_sheet.texture.clone(),
+                                            TextureAtlas {
+                                                layout: character_sprite_sheet
+                                                    .texture_atlas_layout
+                                                    .clone(),
+                                                index: animations.walk_down.first,
+                                            },
+                                        ),
+                                        Anchor::BOTTOM_CENTER,
+                                        Transform::from_translation(Vec3 {
+                                            x: pos.x,
+                                            y: pos.y,
+                                            z: AGENT_Z_VALUE,
+                                        })
+                                        .with_scale(Vec3::splat(0.8)),
+                                        animations.walk_down,
+                                        AnimationDirection::Down,
+                                        AnimationTimer(Timer::from_seconds(
+                                            0.1,
+                                            TimerMode::Repeating,
+                                        )),
+                                    ))
+                                    .id();
+
+                                println!("Agent: {}", agent_entity);
                             }
                         }
                     }
