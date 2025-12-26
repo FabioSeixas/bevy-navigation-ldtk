@@ -55,7 +55,6 @@ fn check_interaction_wait_timeout(
         match interaction_state.as_mut() {
             InteractionState::SourceWaitingForTarget { timeout } => {
                 if timeout.tick(time.delta()).just_finished() {
-
                     custom_debug(
                         entity,
                         "check_interaction_wait_timeout",
@@ -74,9 +73,13 @@ fn check_interaction_wait_timeout(
             }
             InteractionState::TargetWaitingForSource { timeout } => {
                 if timeout.tick(time.delta()).just_finished() {
-                    info!(
-                        "Interaction {} between {} and {} timed out (TargetWaitingForSource)",
-                        entity, interaction.source, interaction.target
+                    custom_debug(
+                        entity,
+                        "check_interaction_wait_timeout",
+                        format!(
+                            "Interaction {} between {} and {} timed out (TargetWaitingForSource)",
+                            entity, interaction.source, interaction.target
+                        ),
                     );
 
                     commands.entity(entity).despawn();
@@ -88,9 +91,13 @@ fn check_interaction_wait_timeout(
             }
             InteractionState::Active { duration } => {
                 if duration.tick(time.delta()).just_finished() {
-                    info!(
-                        "Interaction {} between {} and {} timed out (Active)",
-                        entity, interaction.source, interaction.target
+                    custom_debug(
+                        entity,
+                        "check_interaction_wait_timeout",
+                        format!(
+                            "Interaction {} between {} and {} timed out (Active)",
+                            entity, interaction.source, interaction.target
+                        ),
                     );
                     commands.entity(entity).despawn();
 
@@ -147,11 +154,15 @@ fn receive_interaction_action_system(
                         if let Ok((interaction_entity, mut interaction_state, _interaction)) =
                             interaction_q.get_mut(interaction_item.interaction_entity)
                         {
-                            info!(
-                                "Interaction {} between {} and {} is received by target",
-                                interaction_entity,
-                                interaction_item.source,
-                                interaction_item.target
+                            custom_debug(
+                                entity,
+                                "receive_interaction_action_system",
+                                format!(
+                                    "Interaction {} between {} and {} is received by target",
+                                    interaction_entity,
+                                    interaction_item.source,
+                                    interaction_item.target
+                                ),
                             );
 
                             // let (_, target_label) = interaction.get_kind_labels();
@@ -188,22 +199,40 @@ fn receive_interaction_action_system(
                 if let Ok((_, maybe_waiting_as_target, maybe_actively_interacting)) =
                     agent_q.get(entity)
                 {
-                    if let Some(waiting_as_source) = maybe_waiting_as_target {
-                        if let Ok(_) = interaction_q.get(waiting_as_source.0) {
+                    if let Some(waiting_as_target) = maybe_waiting_as_target {
+                        if let Ok(_) = interaction_q.get(waiting_as_target.0) {
                             // interaction running
                         } else {
-                            info!("Interaction not found while WaitingAsTarget");
+                            custom_debug(
+                                entity,
+                                "receive_interaction_action_system",
+                                format!(
+                                    "Interaction {} not found while WaitingAsTarget",
+                                    waiting_as_target.0
+                                ),
+                            );
                             *state = ActionState::Failure;
                         }
                     } else if let Some(actively_interacting) = maybe_actively_interacting {
                         if let Ok(_) = interaction_q.get(actively_interacting.0) {
                             // interaction running
                         } else {
-                            info!("Interaction not found while ActivelyInteracting");
+                            custom_debug(
+                                entity,
+                                "receive_interaction_action_system",
+                                format!(
+                                    "Interaction {} not found while ActivelyInteracting",
+                                    actively_interacting.0
+                                ),
+                            );
                             *state = ActionState::Failure;
                         }
                     } else {
-                        info!("target is neither WaitingAsSource and ActivelyInteracting");
+                        custom_debug(
+                            entity,
+                            "receive_interaction_action_system",
+                            format!("target is neither WaitingAsSource and ActivelyInteracting",),
+                        );
                         *state = ActionState::Failure;
                     }
                 }
