@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use big_brain::prelude::*;
 
@@ -27,7 +29,17 @@ impl WalkingAction {
 
 #[derive(Component)]
 pub struct GetCloseToEntity {
-    pub entity: Entity,
+    pub target: Entity,
+    pub recalculate_timer: Timer,
+}
+
+impl GetCloseToEntity {
+    pub fn new(target: Entity) -> Self {
+        Self {
+            target,
+            recalculate_timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
+        }
+    }
 }
 
 #[derive(Clone, Component, Debug, ActionBuilder)]

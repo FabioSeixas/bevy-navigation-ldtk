@@ -68,7 +68,6 @@ fn attach_main_thinker_to_agents(
                     Steps::build()
                         .label("Talk")
                         .step(StartInteractionAction)
-                        .step(GetCloseToEntityAction),
                 ),
         );
     }

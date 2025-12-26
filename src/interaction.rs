@@ -3,7 +3,6 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
-    brain::events::InterruptCurrentTaskEvent,
     interaction_queue::{AgentInteractionItem, AgentInteractionQueue},
     walk::components::GetCloseToEntity,
     world::components::GridPosition,
@@ -22,9 +21,21 @@ impl Plugin for InteractionPlugin {
                 )
                     .in_set(BigBrainSet::Actions),
             )
-            .add_systems(Update, check_interaction_wait_timeout);
+            .add_systems(
+                Update,
+                (check_interaction_wait_timeout, start_pending_interactions),
+            );
     }
 }
+
+#[derive(Component, Clone, Copy)]
+pub struct ActivelyInteracting(Entity);
+
+#[derive(Component, Clone, Copy)]
+pub struct WaitingAsTarget(Entity);
+
+#[derive(Component, Clone, Copy)]
+pub struct WaitingAsSource(Entity);
 
 fn check_interaction_wait_timeout(
     mut query: Query<(Entity, &Interaction, &mut InteractionState)>,
@@ -41,10 +52,6 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
-
-                    commands.trigger(InterruptCurrentTaskEvent {
-                        entity: interaction.source,
-                    });
                 };
             }
             InteractionState::TargetWaitingForSource { timeout } => {
@@ -55,14 +62,6 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
-
-                    commands.trigger(InterruptCurrentTaskEvent {
-                        entity: interaction.source,
-                    });
-
-                    commands.trigger(InterruptCurrentTaskEvent {
-                        entity: interaction.target,
-                    });
                 };
             }
             InteractionState::Active { duration } => {
@@ -90,14 +89,21 @@ pub struct ReceiveInteractionAction;
 
 fn receive_interaction_action_system(
     mut interaction_q: Query<(Entity, &mut InteractionState, &Interaction)>,
-    mut agent_q: Query<&mut AgentInteractionQueue, With<Agent>>,
+    mut agent_q: Query<
+        (
+            &mut AgentInteractionQueue,
+            Option<&WaitingAsTarget>,
+            Option<&ActivelyInteracting>,
+        ),
+        With<Agent>,
+    >,
     mut query: Query<(
         &Actor,
         &mut ActionState,
         &mut ReceiveInteractionAction,
         &ActionSpan,
     )>,
-    // mut commands: Commands,
+    mut commands: Commands,
 ) {
     for (Actor(actor), mut state, _, span) in &mut query {
         let _guard = span.span().enter();
@@ -106,7 +112,7 @@ fn receive_interaction_action_system(
 
         match *state {
             ActionState::Requested => {
-                if let Ok(mut agent_interation_queue) = agent_q.get_mut(entity) {
+                if let Ok((mut agent_interation_queue, _, _)) = agent_q.get_mut(entity) {
                     if let Some(interaction_item) = agent_interation_queue.pop_first() {
                         if let Ok((interaction_entity, mut interaction_state, _interaction)) =
                             interaction_q.get_mut(interaction_item.interaction_entity)
@@ -120,9 +126,10 @@ fn receive_interaction_action_system(
 
                             // let (_, target_label) = interaction.get_kind_labels();
 
-                            // commands
-                            //     .entity(interaction_item.target)
-                            //     .insert(WaitingAsTarget)
+                            commands
+                                .entity(interaction_item.target)
+                                .insert(WaitingAsTarget(interaction_entity));
+
                             // .trigger(UpdateText {
                             //     content: format!("{} WaitingAsTarget", target_label),
                             // });
@@ -142,6 +149,30 @@ fn receive_interaction_action_system(
                     };
                 } else {
                     *state = ActionState::Failure;
+                }
+            }
+            ActionState::Executing => {
+                if let Ok((_, maybe_waiting_as_target, maybe_actively_interacting)) =
+                    agent_q.get(entity)
+                {
+                    if let Some(waiting_as_source) = maybe_waiting_as_target {
+                        if let Ok(_) = interaction_q.get(waiting_as_source.0) {
+                            // interaction running
+                        } else {
+                            info!("Interaction not found while WaitingAsTarget");
+                            *state = ActionState::Failure;
+                        }
+                    } else if let Some(actively_interacting) = maybe_actively_interacting {
+                        if let Ok(_) = interaction_q.get(actively_interacting.0) {
+                            // interaction running
+                        } else {
+                            info!("Interaction not found while ActivelyInteracting");
+                            *state = ActionState::Failure;
+                        }
+                    } else {
+                        info!("target is neither WaitingAsSource and ActivelyInteracting");
+                        *state = ActionState::Failure;
+                    }
                 }
             }
             ActionState::Cancelled => {
@@ -244,9 +275,10 @@ fn start_interaction(
         //     InteractionKind::Order => "Ordering",
         // };
 
-        commands.entity(trigger.source).insert(GetCloseToEntity {
-            entity: trigger.target,
-        });
+        commands.entity(trigger.source).insert((
+            WaitingAsSource(interaction_entity),
+            GetCloseToEntity::new(trigger.target)
+        ));
 
         // send interaction request to target
         agent_interation_queue.add(AgentInteractionItem {
@@ -258,8 +290,15 @@ fn start_interaction(
 }
 
 fn start_interaction_action_system(
-    interaction_q: Query<&Interaction>,
-    source_agent_q: Query<&GridPosition, With<Agent>>,
+    interaction_q: Query<&InteractionState>,
+    source_agent_q: Query<
+        (
+            &GridPosition,
+            Option<&WaitingAsSource>,
+            Option<&ActivelyInteracting>,
+        ),
+        With<Agent>,
+    >,
     target_agent_q: Query<(Entity, &GridPosition), With<Agent>>,
     mut query: Query<(
         &Actor,
@@ -276,16 +315,21 @@ fn start_interaction_action_system(
 
         match *state {
             ActionState::Requested => {
-                // Confirm that Agent is not already source in some interaction
-                for interaction in interaction_q {
-                    if interaction.source.eq(&source_entity) {
-                        // info!("Agent is already source in another interaction");
+                if let Ok((source_position, maybe_waiting_as_source, maybe_actively_interacting)) =
+                    source_agent_q.get(source_entity)
+                {
+                    // Confirm that Agent is not already source in some interaction
+                    if maybe_waiting_as_source.is_some() {
                         *state = ActionState::Failure;
                         return;
                     }
-                }
 
-                if let Ok(source_position) = source_agent_q.get(source_entity) {
+                    // Confirm that Agent is not already interacting
+                    if maybe_actively_interacting.is_some() {
+                        *state = ActionState::Failure;
+                        return;
+                    }
+
                     // This code is starting interaction with a random agent
                     // Not generic enough to be used to start other types of interactions
                     if let Some((target_entity, _, _)) =
@@ -304,9 +348,85 @@ fn start_interaction_action_system(
                     *state = ActionState::Failure;
                 }
             }
+            ActionState::Executing => {
+                if let Ok((_, maybe_waiting_as_source, maybe_actively_interacting)) =
+                    source_agent_q.get(source_entity)
+                {
+                    if let Some(waiting_as_source) = maybe_waiting_as_source {
+                        if let Ok(_) = interaction_q.get(waiting_as_source.0) {
+                            // interaction running
+                        } else {
+                            info!("Interaction not found while WaitingAsSource");
+                            *state = ActionState::Failure;
+                        }
+                    } else if let Some(actively_interacting) = maybe_actively_interacting {
+                        if let Ok(_) = interaction_q.get(actively_interacting.0) {
+                            // interaction running
+                        } else {
+                            info!("Interaction not found while ActivelyInteracting");
+                            *state = ActionState::Failure;
+                        }
+                    } else {
+                        info!("source is neither WaitingAsSource and ActivelyInteracting");
+                        *state = ActionState::Failure;
+                    }
+                }
+            }
             ActionState::Cancelled => {
                 info!("start interaction was cancelled");
                 *state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn start_pending_interactions(
+    mut query: Query<(Entity, &Interaction, &mut InteractionState)>,
+    agent_query: Query<&GridPosition, Without<ActivelyInteracting>>,
+    mut commands: Commands,
+) {
+    for (interaction_entity, interaction, mut interaction_state) in &mut query {
+        match interaction_state.as_mut() {
+            InteractionState::TargetWaitingForSource { timeout: _ } => {
+                let mut should_start_interaction = false;
+
+                if let Ok(source_position) = agent_query.get(interaction.source) {
+                    if let Ok(target_position) = agent_query.get(interaction.target) {
+                        if source_position.is_adjacent(target_position) {
+                            should_start_interaction = true;
+                        } else {
+                            info!(
+                                "TargetWaitingForSource: source not close enough. Target: {}. Source: {}.",
+                                interaction.target, interaction.source
+                            );
+                        }
+                    }
+                }
+
+                if should_start_interaction {
+                    info!(
+                        "Interaction {} between {} and {} is starting",
+                        interaction_entity, interaction.source, interaction.target
+                    );
+
+                    let active_interaction = ActivelyInteracting(interaction_entity);
+                    // let (source_label, target_label) = interaction.get_kind_labels();
+
+                    commands
+                        .entity(interaction.source)
+                        .remove::<WaitingAsSource>()
+                        .insert(active_interaction.clone());
+
+                    commands
+                        .entity(interaction.target)
+                        .remove::<WaitingAsTarget>()
+                        .insert(active_interaction);
+
+                    *interaction_state = InteractionState::Active {
+                        duration: Timer::from_seconds(5., TimerMode::Once),
+                    };
+                }
             }
             _ => {}
         }

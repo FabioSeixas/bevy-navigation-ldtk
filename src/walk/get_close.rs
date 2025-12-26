@@ -1,111 +1,74 @@
 use bevy::prelude::*;
-use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
-    walk::components::{GetCloseToEntity, GetCloseToEntityAction, Walking},
+    walk::components::{GetCloseToEntity, Walking},
     world::{components::GridPosition, spatial_idx::SpatialIndex},
 };
 
-pub fn get_close_to_entity_action_system(
-    agent_q: Query<(&GridPosition, Option<&Walking>, Option<&GetCloseToEntity>), With<Agent>>,
+pub fn get_close_to_entity_system(
+    agent_q: Query<(Entity, &GridPosition, Option<&Walking>, &GetCloseToEntity), With<Agent>>,
     target_agent_q: Query<&GridPosition, With<Agent>>,
-    mut query: Query<(
-        &Actor,
-        &mut ActionState,
-        &GetCloseToEntityAction,
-        &ActionSpan,
-    )>,
     spatial_idx: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
-    for (Actor(actor), mut state, _get_close_to_action, span) in &mut query {
-        let _guard = span.span().enter();
+    for (entity, source_current_position, maybe_walking, get_close_to_entity) in agent_q {
+        let mut clean_up = false;
+        if let Some(walking) = maybe_walking {
+            if source_current_position.eq(&walking.destination) {
+                info!("Done walking");
 
-        let source_entity = *actor;
-
-        match *state {
-            ActionState::Requested => {
-                if let Ok((source_current_position, _, maybe_get_close_to_entity)) =
-                    agent_q.get(source_entity)
-                {
-                    if let Some(get_close_to_entity) = maybe_get_close_to_entity {
-                        if let Ok(target_position) = target_agent_q.get(get_close_to_entity.entity)
-                        {
-                            for destination_option in
-                                source_current_position.get_ordered_neighbors(target_position)
-                            {
-                                if let Some(tile_data) = spatial_idx
-                                    .get_tile_data(destination_option.x, destination_option.y)
-                                {
-                                    if tile_data.is_valid_destination() {
-                                        commands.entity(source_entity).insert(Walking {
-                                            destination: destination_option
-                                        });
-                                        *state = ActionState::Executing;
-                                    }
-                                }
-                            }
-                        } else {
-                            info!("Target not found");
-                            *state = ActionState::Failure;
-                        }
+                // Check if target position still the same
+                if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
+                    if source_current_position.is_adjacent(target_position) {
+                        // success, clean everything
+                        clean_up = true;
                     } else {
-                        info!("GetCloseToEntity is None, wait next tick");
+                        info!("GetCloseToEntity: Target moved, walking again");
+                        commands.entity(entity).remove::<Walking>();
                     }
                 } else {
-                    info!("Source not found");
-                    *state = ActionState::Failure;
+                    info!("Target not found");
+                    clean_up = true;
+                }
+            } else {
+                if get_close_to_entity.recalculate_timer.is_finished() {
+                    info!("GetCloseToEntity: recalculating");
+                    commands.entity(entity).remove::<Walking>();
                 }
             }
-            ActionState::Executing => {
-                if let Ok((source_current_position, maybe_walking, maybe_get_close_to_entity)) =
-                    agent_q.get(source_entity)
+        } else {
+            if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
+                for destination_option in
+                    source_current_position.get_ordered_neighbors(target_position)
                 {
-                    if let Some(walking) = maybe_walking {
-                        // TODO: check if target moved, so start again
-                        if source_current_position.eq(&walking.destination) {
-                            info!("Done walking");
-
-                            let target = maybe_get_close_to_entity
-                                .expect("get close to entity must not be None");
-
-                            // Check if target position still the same
-                            if let Ok(target_position) = target_agent_q.get(target.entity) {
-                                // TODO: fix distance check here
-                                if source_current_position.is_adjacent(target_position) {
-                                    *state = ActionState::Success;
-                                } else {
-                                    info!("Target moved, walking again");
-                                    commands.entity(source_entity).remove::<Walking>();
-                                    *state = ActionState::Requested;
-                                }
-                            } else {
-                                info!("Target not found");
-                                *state = ActionState::Failure;
-                            }
+                    if let Some(tile_data) =
+                        spatial_idx.get_tile_data(destination_option.x, destination_option.y)
+                    {
+                        if tile_data.is_valid_destination() {
+                            commands.entity(entity).insert(Walking {
+                                destination: destination_option,
+                            });
                         }
-                    } else {
-                        info!("Walking is None");
-                        *state = ActionState::Failure;
                     }
                 }
+            } else {
+                info!("Target not found");
+                clean_up = true;
             }
-            ActionState::Cancelled => {
-                info!("GetCloseToEntityAction was cancelled");
-                *state = ActionState::Failure;
-            }
-            ActionState::Failure => {
-                commands
-                    .entity(source_entity)
-                    .remove::<(Walking, GetCloseToEntity)>();
-            }
-            ActionState::Success => {
-                commands
-                    .entity(source_entity)
-                    .remove::<(Walking, GetCloseToEntity)>();
-            }
-            _ => {}
         }
+
+        if clean_up {
+            info!("GetCloseToEntity: clean up");
+            commands
+                .entity(entity)
+                .remove::<(Walking, GetCloseToEntity)>();
+        }
+    }
+}
+
+pub fn tick_get_close_to_entity_system(query: Query<&mut GetCloseToEntity>, time: Res<Time>) {
+    for mut get_close_to_entity in query {
+        get_close_to_entity.recalculate_timer.tick(time.delta());
     }
 }
