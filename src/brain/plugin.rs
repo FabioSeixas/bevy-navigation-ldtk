@@ -5,7 +5,7 @@ use crate::{
     agent::Agent,
     brain::{interrupt::*, scorers::*},
     consume::ConsumeAction,
-    interaction::StartInteractionAction,
+    interaction::{ReceiveInteractionAction, StartInteractionAction},
     walk::components::{GetCloseToEntityAction, WalkingAction},
     world::grid::Grid,
 };
@@ -23,6 +23,7 @@ impl Plugin for BrainPlugin {
                     relax_scorer_system,
                     talk_scorer_system,
                     interrupt_current_task_scorer_system,
+                    receive_interaction_scorer_system,
                 )
                     .in_set(BigBrainSet::Scorers),
             )
@@ -46,9 +47,16 @@ fn attach_main_thinker_to_agents(
                 .when(InterruptCurrentTaskScorer, InterruptCurrentTaskAction)
                 // Priority 2:
                 .when(
+                    ReiceiveInteractionScorer,
+                    Steps::build()
+                        .label("ReceiveInteraction")
+                        .step(ReceiveInteractionAction)
+                )
+                // Priority 3:
+                .when(
                     HungryScorer,
                     Steps::build()
-                        .label("WalkAndConsume")
+                        .label("Hungry")
                         .step(WalkingAction::destination(hungry_location.clone()))
                         .step(ConsumeAction::new()),
                 )

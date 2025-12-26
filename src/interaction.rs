@@ -16,7 +16,11 @@ impl Plugin for InteractionPlugin {
         app.add_observer(start_interaction)
             .add_systems(
                 PreUpdate,
-                start_interaction_action_system.in_set(BigBrainSet::Actions),
+                (
+                    start_interaction_action_system,
+                    receive_interaction_action_system,
+                )
+                    .in_set(BigBrainSet::Actions),
             )
             .add_systems(Update, check_interaction_wait_timeout);
     }
@@ -51,6 +55,14 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
+
+                    commands.trigger(InterruptCurrentTaskEvent {
+                        entity: interaction.source,
+                    });
+
+                    commands.trigger(InterruptCurrentTaskEvent {
+                        entity: interaction.target,
+                    });
                 };
             }
             InteractionState::Active { duration } => {
@@ -73,49 +85,73 @@ fn check_interaction_wait_timeout(
     }
 }
 
-// fn check_agent_interaction_queue_system(
-//     mut query: Query<
-//         (Option<&mut ActionComponent>, &mut AgentInteractionQueue),
-//         (Without<ActiveInteraction>, Without<WaitingAsTarget>),
-//     >,
-//     mut interaction_query: Query<(&mut InteractionState, &Interaction)>,
-//     mut commands: Commands,
-// ) {
-//     for (maybe_action, mut agent_interation_queue) in &mut query {
-//         if !agent_interation_queue.is_empty() {
-//             if let Some(interaction_item) = agent_interation_queue.pop_first() {
-//                 if let Ok((mut interaction_state, interaction)) =
-//                     interaction_query.get_mut(interaction_item.interaction_entity)
-//                 {
-//                     println!(
-//                         "Interaction between {} and {} is received by target",
-//                         interaction_item.source, interaction_item.target
-//                     );
-//
-//                     let (_, target_label) = interaction.get_kind_labels();
-//
-//                     commands
-//                         .entity(interaction_item.target)
-//                         .insert(WaitingAsTarget)
-//                         .trigger(UpdateText {
-//                             content: format!("{} WaitingAsTarget", target_label),
-//                         });
-//
-//                     if let Some(mut action) = maybe_action {
-//                         action.pause();
-//                     }
-//
-//                     *interaction_state = InteractionState::TargetWaitingForSource {
-//                         timeout: Timer::from_seconds(10., TimerMode::Once),
-//                     };
-//
-//                     // only one agent will be able to receive an interaction by frame
-//                     break;
-//                 }
-//             };
-//         }
-//     }
-// }
+#[derive(Clone, Component, Debug, ActionBuilder)]
+pub struct ReceiveInteractionAction;
+
+fn receive_interaction_action_system(
+    mut interaction_q: Query<(Entity, &mut InteractionState, &Interaction)>,
+    mut agent_q: Query<&mut AgentInteractionQueue, With<Agent>>,
+    mut query: Query<(
+        &Actor,
+        &mut ActionState,
+        &mut ReceiveInteractionAction,
+        &ActionSpan,
+    )>,
+    // mut commands: Commands,
+) {
+    for (Actor(actor), mut state, _, span) in &mut query {
+        let _guard = span.span().enter();
+
+        let entity = *actor;
+
+        match *state {
+            ActionState::Requested => {
+                if let Ok(mut agent_interation_queue) = agent_q.get_mut(entity) {
+                    if let Some(interaction_item) = agent_interation_queue.pop_first() {
+                        if let Ok((interaction_entity, mut interaction_state, _interaction)) =
+                            interaction_q.get_mut(interaction_item.interaction_entity)
+                        {
+                            info!(
+                                "Interaction {} between {} and {} is received by target",
+                                interaction_entity,
+                                interaction_item.source,
+                                interaction_item.target
+                            );
+
+                            // let (_, target_label) = interaction.get_kind_labels();
+
+                            // commands
+                            //     .entity(interaction_item.target)
+                            //     .insert(WaitingAsTarget)
+                            // .trigger(UpdateText {
+                            //     content: format!("{} WaitingAsTarget", target_label),
+                            // });
+
+                            // if let Some(mut action) = maybe_action {
+                            //     action.pause();
+                            // }
+
+                            *interaction_state = InteractionState::TargetWaitingForSource {
+                                timeout: Timer::from_seconds(10., TimerMode::Once),
+                            };
+
+                            *state = ActionState::Success;
+                        } else {
+                            *state = ActionState::Failure;
+                        }
+                    };
+                } else {
+                    *state = ActionState::Failure;
+                }
+            }
+            ActionState::Cancelled => {
+                info!("receive interaction was cancelled");
+                *state = ActionState::Failure;
+            }
+            _ => {}
+        }
+    }
+}
 
 #[derive(Clone, Component, Debug, ActionBuilder)]
 pub struct StartInteractionAction;
