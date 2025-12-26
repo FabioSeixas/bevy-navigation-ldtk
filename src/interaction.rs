@@ -28,6 +28,11 @@ impl Plugin for InteractionPlugin {
     }
 }
 
+#[derive(Event)]
+pub struct InteractionTimedOut {
+    pub entity: Entity,
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct ActivelyInteracting(Entity);
 
@@ -52,6 +57,10 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
+
+                    commands.trigger(InteractionTimedOut {
+                        entity: interaction.source,
+                    });
                 };
             }
             InteractionState::TargetWaitingForSource { timeout } => {
@@ -62,6 +71,13 @@ fn check_interaction_wait_timeout(
                     );
 
                     commands.entity(entity).despawn();
+
+                    commands.trigger(InteractionTimedOut {
+                        entity: interaction.source,
+                    });
+                    // commands.trigger(InteractionTimedOut {
+                    //     entity: interaction.target
+                    // });
                 };
             }
             InteractionState::Active { duration } => {
@@ -142,7 +158,10 @@ fn receive_interaction_action_system(
                                 timeout: Timer::from_seconds(10., TimerMode::Once),
                             };
 
-                            *state = ActionState::Success;
+                            *state = ActionState::Executing;
+
+                            // only one agent will be able to receive an interaction by frame
+                            return;
                         } else {
                             *state = ActionState::Failure;
                         }
@@ -178,6 +197,11 @@ fn receive_interaction_action_system(
             ActionState::Cancelled => {
                 info!("receive interaction was cancelled");
                 *state = ActionState::Failure;
+            }
+            ActionState::Failure => {
+                commands
+                    .entity(entity)
+                    .remove::<(WaitingAsTarget, ActivelyInteracting)>();
             }
             _ => {}
         }
@@ -277,7 +301,7 @@ fn start_interaction(
 
         commands.entity(trigger.source).insert((
             WaitingAsSource(interaction_entity),
-            GetCloseToEntity::new(trigger.target)
+            GetCloseToEntity::new(trigger.target),
         ));
 
         // send interaction request to target
@@ -321,13 +345,13 @@ fn start_interaction_action_system(
                     // Confirm that Agent is not already source in some interaction
                     if maybe_waiting_as_source.is_some() {
                         *state = ActionState::Failure;
-                        return;
+                        continue;
                     }
 
                     // Confirm that Agent is not already interacting
                     if maybe_actively_interacting.is_some() {
                         *state = ActionState::Failure;
-                        return;
+                        continue;
                     }
 
                     // This code is starting interaction with a random agent
@@ -340,7 +364,7 @@ fn start_interaction_action_system(
                             source: source_entity,
                             target: target_entity,
                         });
-                        *state = ActionState::Success;
+                        *state = ActionState::Executing;
                     } else {
                         *state = ActionState::Failure;
                     }
@@ -375,6 +399,11 @@ fn start_interaction_action_system(
             ActionState::Cancelled => {
                 info!("start interaction was cancelled");
                 *state = ActionState::Failure;
+            }
+            ActionState::Failure => {
+                commands
+                    .entity(source_entity)
+                    .remove::<(WaitingAsSource, ActivelyInteracting)>();
             }
             _ => {}
         }

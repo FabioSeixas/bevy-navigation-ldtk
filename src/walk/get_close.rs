@@ -2,9 +2,23 @@ use bevy::prelude::*;
 
 use crate::{
     agent::Agent,
+    interaction::InteractionTimedOut,
     walk::components::{GetCloseToEntity, Walking},
     world::{components::GridPosition, spatial_idx::SpatialIndex},
 };
+
+pub fn clean_get_close_to_entity_observer(
+    event: On<InteractionTimedOut>,
+    agent_q: Query<&GetCloseToEntity, With<Agent>>,
+    mut commands: Commands,
+) {
+    let entity = event.entity;
+    if let Ok(_) = agent_q.get(entity) {
+        commands
+            .entity(entity)
+            .remove::<(Walking, GetCloseToEntity)>();
+    }
+}
 
 pub fn get_close_to_entity_system(
     agent_q: Query<(Entity, &GridPosition, Option<&Walking>, &GetCloseToEntity), With<Agent>>,
