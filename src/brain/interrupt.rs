@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use big_brain::prelude::*;
 
-use crate::brain::events::InterruptCurrentTaskEvent;
+use crate::{brain::events::InterruptCurrentTaskEvent, log::custom_debug};
 
 #[derive(Clone, Component, Debug)]
 pub struct InterruptCurrentTaskMarker;
@@ -23,9 +23,13 @@ pub fn interrupt_current_task_scorer_system(
     mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<InterruptCurrentTaskScorer>>,
     mut commands: Commands,
 ) {
-    for (Actor(actor), mut score, span) in &mut query {
+    for (Actor(actor), mut score, _span) in &mut query {
         if let Ok(entity) = agent_q.get(*actor) {
-            info!("Interrupting current action");
+            custom_debug(
+                entity,
+                "interrupt_current_task_scorer_system",
+                "interrupt current action".into(),
+            );
 
             score.set(1.);
 

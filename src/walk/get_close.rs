@@ -2,19 +2,25 @@ use bevy::prelude::*;
 
 use crate::{
     agent::Agent,
-    interaction::InteractionTimedOut,
+    interaction::InteractionFinished,
+    log::custom_debug,
     walk::components::{GetCloseToEntity, Walking},
     world::{components::GridPosition, spatial_idx::SpatialIndex},
 };
 
 pub fn clean_get_close_to_entity_observer(
-    event: On<InteractionTimedOut>,
+    event: On<InteractionFinished>,
     agent_q: Query<&GetCloseToEntity, With<Agent>>,
     mut commands: Commands,
 ) {
-    let entity = event.entity;
+    let entity = event.source;
     if let Ok(_) = agent_q.get(entity) {
-        info!("GetCloseToEntity: Cleaning on InteractionTimedOut");
+        custom_debug(
+            entity,
+            "clean_get_close_to_entity_observer",
+            "GetCloseToEntity: Cleaning on InteractionFinished".into(),
+        );
+
         commands
             .entity(entity)
             .remove::<(Walking, GetCloseToEntity)>();
@@ -31,7 +37,7 @@ pub fn get_close_to_entity_system(
         let mut clean_up = false;
         if let Some(walking) = maybe_walking {
             if source_current_position.eq(&walking.destination) {
-                info!("Done walking");
+                custom_debug(entity, "get_close_to_entity_system", "Done walking".into());
 
                 // Check if target position still the same
                 if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
@@ -39,42 +45,67 @@ pub fn get_close_to_entity_system(
                         // success, clean everything
                         clean_up = true;
                     } else {
-                        info!("GetCloseToEntity: Target moved, walking again");
+                        custom_debug(
+                            entity,
+                            "get_close_to_entity_system",
+                            "Target moved, walking again".into(),
+                        );
                         commands.entity(entity).remove::<Walking>();
                     }
                 } else {
-                    info!("Target not found");
+                    custom_debug(
+                        entity,
+                        "get_close_to_entity_system",
+                        "Target not found".into(),
+                    );
                     clean_up = true;
                 }
             } else {
                 if get_close_to_entity.recalculate_timer.is_finished() {
-                    info!("GetCloseToEntity: recalculating");
+                    custom_debug(entity, "get_close_to_entity_system", "Recalculating".into());
                     commands.entity(entity).remove::<Walking>();
                 }
             }
         } else {
             if let Ok(target_position) = target_agent_q.get(get_close_to_entity.target) {
-                for destination_option in
-                    source_current_position.get_ordered_neighbors(target_position)
-                {
-                    if let Some(tile_data) =
-                        spatial_idx.get_tile_data(destination_option.x, destination_option.y)
+                if target_position.is_adjacent(source_current_position) {
+                    clean_up = true;
+                } else {
+                    for destination_option in
+                        source_current_position.get_ordered_neighbors(target_position)
                     {
-                        if tile_data.is_valid_destination() {
-                            commands.entity(entity).insert(Walking {
-                                destination: destination_option,
-                            });
+                        if let Some(tile_data) =
+                            spatial_idx.get_tile_data(destination_option.x, destination_option.y)
+                        {
+                            if tile_data.is_valid_destination() {
+                                custom_debug(
+                                    entity,
+                                    "get_close_to_entity_system",
+                                    "Start walking".into(),
+                                );
+
+                                commands.entity(entity).insert(Walking {
+                                    destination: destination_option,
+                                });
+
+                                // break the for loop
+                                break;
+                            }
                         }
                     }
                 }
             } else {
-                info!("Target not found");
+                custom_debug(
+                    entity,
+                    "get_close_to_entity_system",
+                    "Target not found".into(),
+                );
                 clean_up = true;
             }
         }
 
         if clean_up {
-            info!("GetCloseToEntity: clean up");
+            custom_debug(entity, "get_close_to_entity_system", "clean up".into());
             commands
                 .entity(entity)
                 .remove::<(Walking, GetCloseToEntity)>();

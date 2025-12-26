@@ -5,8 +5,8 @@ use crate::{
     agent::Agent,
     brain::{interrupt::*, scorers::*},
     consume::ConsumeAction,
-    interaction::{ReceiveInteractionAction, StartInteractionAction},
-    walk::components::{GetCloseToEntityAction, WalkingAction},
+    interaction::{HandleAnyInteractionAction, TalkAction},
+    walk::components::WalkingAction,
     world::grid::Grid,
 };
 
@@ -23,7 +23,7 @@ impl Plugin for BrainPlugin {
                     relax_scorer_system,
                     talk_scorer_system,
                     interrupt_current_task_scorer_system,
-                    receive_interaction_scorer_system,
+                    handle_any_interaction_scorer_system,
                 )
                     .in_set(BigBrainSet::Scorers),
             )
@@ -43,16 +43,12 @@ fn attach_main_thinker_to_agents(
         commands.entity(entity).insert(
             Thinker::build()
                 .label("Main Thinker")
-                // Priority 1: Will force the cancelation of anything running right now
+                // P1: Highest priority interrupt.
                 .when(InterruptCurrentTaskScorer, InterruptCurrentTaskAction)
-                // Priority 2:
-                .when(
-                    ReiceiveInteractionScorer,
-                    Steps::build()
-                        .label("ReceiveInteraction")
-                        .step(ReceiveInteractionAction)
-                )
-                // Priority 3:
+                // P2: Handle any ongoing interaction state.
+                .when(HandleAnyInteractionScorer, HandleAnyInteractionAction)
+                // P3: Lowest priority general behaviors.
+                .picker(Highest)
                 .when(
                     HungryScorer,
                     Steps::build()
@@ -60,15 +56,8 @@ fn attach_main_thinker_to_agents(
                         .step(WalkingAction::destination(hungry_location.clone()))
                         .step(ConsumeAction::new()),
                 )
-                // Priority 3: Normal, scored behaviors. `pick` runs the action with the highest score.
-                .picker(Highest)
-                // .when(RelaxScorer, WalkingAction::random_destination())
-                .when(
-                    TalkScorer,
-                    Steps::build()
-                        .label("Talk")
-                        .step(StartInteractionAction)
-                ),
+                // .when(RelaxScorer, WalkingAction::random_destination()),
+                .when(TalkScorer, TalkAction)
         );
     }
 }

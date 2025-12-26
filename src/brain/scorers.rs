@@ -4,9 +4,7 @@ use rand::Rng;
 
 use crate::{
     agent::Agent,
-    interaction::{ActivelyInteracting, WaitingAsTarget},
-    interaction_queue::AgentInteractionQueue,
-    log::custom_debug,
+    interaction::{ActivelyInteracting, WaitingAsSource, WaitingAsTarget},
 };
 
 #[derive(Clone, Component, Debug, ScorerBuilder)]
@@ -16,7 +14,7 @@ pub fn hungry_scorer_system(
     agent_q: Query<&Agent>,
     mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<HungryScorer>>,
 ) {
-    for (Actor(actor), mut score, span) in &mut query {
+    for (Actor(actor), mut score, _span) in &mut query {
         if let Ok(agent) = agent_q.get(*actor) {
             if agent.is_hungry() {
                 score.set(1.);
@@ -36,12 +34,22 @@ fn get_probability(max: f32) -> f32 {
 pub struct RelaxScorer;
 
 pub fn relax_scorer_system(
-    agent_q: Query<Entity, With<Agent>>,
+    agent_q: Query<
+        Entity,
+        (
+            With<Agent>,
+            Without<WaitingAsSource>,
+            Without<WaitingAsTarget>,
+            Without<ActivelyInteracting>,
+        ),
+    >,
     mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<RelaxScorer>>,
 ) {
-    for (Actor(actor), mut score, span) in &mut query {
+    for (Actor(actor), mut score, _span) in &mut query {
         if let Ok(_) = agent_q.get(*actor) {
             score.set(get_probability(0.5));
+        } else {
+            score.set(0.);
         }
     }
 }
@@ -50,48 +58,48 @@ pub fn relax_scorer_system(
 pub struct TalkScorer;
 
 pub fn talk_scorer_system(
-    agent_q: Query<Entity, With<Agent>>,
+    agent_q: Query<
+        Entity,
+        (
+            With<Agent>,
+            Without<WaitingAsSource>,
+            Without<WaitingAsTarget>,
+            Without<ActivelyInteracting>,
+        ),
+    >,
     mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<TalkScorer>>,
 ) {
-    for (Actor(actor), mut score, span) in &mut query {
+    for (Actor(actor), mut score, _span) in &mut query {
         if let Ok(_) = agent_q.get(*actor) {
             score.set(get_probability(0.5));
+        } else {
+            score.set(0.);
         }
     }
 }
 
 #[derive(Clone, Component, Debug, ScorerBuilder)]
-pub struct ReiceiveInteractionScorer;
+pub struct HandleAnyInteractionScorer;
 
-pub fn receive_interaction_scorer_system(
+pub fn handle_any_interaction_scorer_system(
     agent_q: Query<
-        &AgentInteractionQueue,
+        Entity,
         (
             With<Agent>,
-            Without<WaitingAsTarget>,
-            Without<ActivelyInteracting>,
+            Or<(
+                With<WaitingAsTarget>,
+                With<WaitingAsSource>,
+                With<ActivelyInteracting>,
+            )>,
         ),
     >,
-    mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<ReiceiveInteractionScorer>>,
+    mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<HandleAnyInteractionScorer>>,
 ) {
-    for (Actor(actor), mut score, span) in &mut query {
-        // when not found (WaitingAsTarget is present) it will keep the last value used (I hope)
-        if let Ok(agent_interaction_queue) = agent_q.get(*actor) {
-            if agent_interaction_queue.is_empty() {
-                custom_debug(
-                    *actor,
-                    "receive_interaction_scorer_system",
-                    format!("queue is empty"),
-                );
-                score.set(0.);
-            } else {
-                custom_debug(
-                    *actor,
-                    "receive_interaction_scorer_system",
-                    format!("queue is NOT empty"),
-                );
-                score.set(1.);
-            }
+    for (Actor(actor), mut score, _span) in &mut query {
+        if let Ok(_) = agent_q.get(*actor) {
+            score.set(1.0);
+        } else {
+            score.set(0.);
         }
     }
 }
