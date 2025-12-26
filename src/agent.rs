@@ -154,10 +154,11 @@ impl AgentPathfinding {
         *self = AgentPathfinding::Calculating(Pathfinder::new(agent_curr_position, destination));
     }
 
-    pub fn start_walking_path(&mut self, path: Vec<GridPosition>) {
+    pub fn start_walking_path(&mut self, path: Vec<GridPosition>, final_destination: GridPosition) {
         *self = AgentPathfinding::Ready(AgentCurrentPath {
             path,
             status: AgentCurrentPathStatus::WaitingNextStep((0, 0)),
+            final_destination,
         });
     }
 
@@ -170,6 +171,7 @@ impl AgentPathfinding {
 pub struct AgentCurrentPath {
     path: Vec<GridPosition>,
     status: AgentCurrentPathStatus,
+    final_destination: GridPosition,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -204,7 +206,7 @@ fn check_agent_pathfinding(
                 }
                 AgentPathfinding::Calculating(pathfinder) => {
                     if let Some(path) = pathfinder.get_path_if_finished() {
-                        pathfinding.start_walking_path(path);
+                        pathfinding.start_walking_path(path, walking.destination.clone());
                         UpdateAgentColor::walking_path(&mut commands, agent_entity);
                     } else {
                         pathfinder.step(&spatial_idx, &dynamic_occupied_tiles);
@@ -214,6 +216,16 @@ fn check_agent_pathfinding(
                     if let AgentCurrentPathStatus::WaitingNextStep((step, retry)) =
                         &mut current_path.status
                     {
+                        // Check if final destination changed
+                        if current_path.final_destination.ne(&walking.destination) {
+                            pathfinding
+                                .start_path_calculation(agent_curr_position, &walking.destination);
+
+                            UpdateAgentColor::calculating_path(&mut commands, agent_entity);
+
+                            continue;
+                        }
+
                         if *retry > 10 {
                             pathfinding
                                 .start_path_calculation(agent_curr_position, &walking.destination);

@@ -14,6 +14,7 @@ pub fn clean_get_close_to_entity_observer(
 ) {
     let entity = event.entity;
     if let Ok(_) = agent_q.get(entity) {
+        info!("GetCloseToEntity: Cleaning on InteractionTimedOut");
         commands
             .entity(entity)
             .remove::<(Walking, GetCloseToEntity)>();

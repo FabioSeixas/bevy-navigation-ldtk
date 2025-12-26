@@ -4,6 +4,7 @@ use big_brain::prelude::*;
 use crate::{
     agent::Agent,
     interaction_queue::{AgentInteractionItem, AgentInteractionQueue},
+    log::custom_debug,
     walk::components::GetCloseToEntity,
     world::components::GridPosition,
 };
@@ -23,7 +24,10 @@ impl Plugin for InteractionPlugin {
             )
             .add_systems(
                 Update,
-                (check_interaction_wait_timeout, start_pending_interactions),
+                (
+                    check_interaction_wait_timeout,
+                    activate_pending_interactions,
+                ),
             );
     }
 }
@@ -51,9 +55,14 @@ fn check_interaction_wait_timeout(
         match interaction_state.as_mut() {
             InteractionState::SourceWaitingForTarget { timeout } => {
                 if timeout.tick(time.delta()).just_finished() {
-                    info!(
-                        "Interaction {} between {} and {} timed out (SourceWaitingForTarget)",
-                        entity, interaction.source, interaction.target
+
+                    custom_debug(
+                        entity,
+                        "check_interaction_wait_timeout",
+                        format!(
+                            "Interaction {} between {} and {} timed out (SourceWaitingForTarget)",
+                            entity, interaction.source, interaction.target
+                        ),
                     );
 
                     commands.entity(entity).despawn();
@@ -75,14 +84,19 @@ fn check_interaction_wait_timeout(
                     commands.trigger(InteractionTimedOut {
                         entity: interaction.source,
                     });
-                    // commands.trigger(InteractionTimedOut {
-                    //     entity: interaction.target
-                    // });
                 };
             }
             InteractionState::Active { duration } => {
                 if duration.tick(time.delta()).just_finished() {
+                    info!(
+                        "Interaction {} between {} and {} timed out (Active)",
+                        entity, interaction.source, interaction.target
+                    );
                     commands.entity(entity).despawn();
+
+                    commands.trigger(InteractionTimedOut {
+                        entity: interaction.source,
+                    });
                 };
             }
             InteractionState::Running { duration } => {
@@ -199,6 +213,7 @@ fn receive_interaction_action_system(
                 *state = ActionState::Failure;
             }
             ActionState::Failure => {
+                info!("receive interaction failure");
                 commands
                     .entity(entity)
                     .remove::<(WaitingAsTarget, ActivelyInteracting)>();
@@ -401,6 +416,7 @@ fn start_interaction_action_system(
                 *state = ActionState::Failure;
             }
             ActionState::Failure => {
+                info!("start interaction failure");
                 commands
                     .entity(source_entity)
                     .remove::<(WaitingAsSource, ActivelyInteracting)>();
@@ -410,7 +426,7 @@ fn start_interaction_action_system(
     }
 }
 
-fn start_pending_interactions(
+fn activate_pending_interactions(
     mut query: Query<(Entity, &Interaction, &mut InteractionState)>,
     agent_query: Query<&GridPosition, Without<ActivelyInteracting>>,
     mut commands: Commands,
@@ -435,7 +451,7 @@ fn start_pending_interactions(
 
                 if should_start_interaction {
                     info!(
-                        "Interaction {} between {} and {} is starting",
+                        "Interaction {} between {} and {} is activating",
                         interaction_entity, interaction.source, interaction.target
                     );
 

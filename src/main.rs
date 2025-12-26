@@ -12,6 +12,7 @@ mod pathfinder;
 mod roof;
 mod walk;
 mod world;
+mod log;
 
 use agent::{Agent, AgentPlugin};
 use animation::AnimationPlugin;
