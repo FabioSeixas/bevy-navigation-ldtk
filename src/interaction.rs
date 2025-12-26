@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use bevy::prelude::*;
 use big_brain::prelude::*;
 
@@ -179,12 +181,12 @@ fn check_interaction_wait_timeout(
 fn process_interaction_queue_system(
     mut commands: Commands,
     mut agent_q: Query<
-        (Entity, &mut AgentInteractionQueue, Option<&WaitingAsSource>),
+        (Entity, &mut AgentInteractionQueue),
         (Without<WaitingAsTarget>, Without<ActivelyInteracting>),
     >,
     mut interaction_q: Query<(&mut InteractionState, &Interaction)>,
 ) {
-    for (agent_entity, mut agent_interaction_queue, maybe_source) in agent_q.iter_mut() {
+    for (agent_entity, mut agent_interaction_queue) in agent_q.iter_mut() {
         if let Some(interaction_item) = agent_interaction_queue.pop_first() {
             if let Ok((mut interaction_state, _)) =
                 interaction_q.get_mut(interaction_item.interaction_entity)
@@ -206,24 +208,6 @@ fn process_interaction_queue_system(
                 *interaction_state = InteractionState::TargetWaitingForSource {
                     timeout: Timer::from_seconds(10., TimerMode::Once),
                 };
-
-                // If the agent is NOT already initiating an interaction, interrupt its current task.
-                // if maybe_source.is_none() {
-                //     custom_debug(
-                //         agent_entity,
-                //         "process_interaction_queue_system",
-                //         "Agent is not a source, firing interrupt.".into(),
-                //     );
-                //     commands.trigger(InterruptCurrentTaskEvent {
-                //         entity: agent_entity,
-                //     });
-                // } else {
-                //     custom_debug(
-                //         agent_entity,
-                //         "process_interaction_queue_system",
-                //         "Agent is already a source, not interrupting.".into(),
-                //     );
-                // }
             }
         }
     }
@@ -383,7 +367,7 @@ pub enum FinishInteractionResult {
     Failure,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct Interaction {
     pub source: Entity,
     pub target: Entity,
@@ -444,53 +428,66 @@ fn activate_pending_interactions(
     agent_query: Query<&GridPosition, Without<ActivelyInteracting>>,
     mut commands: Commands,
 ) {
-    for (interaction_entity, interaction, mut interaction_state) in &mut query {
-        match interaction_state.as_mut() {
-            InteractionState::TargetWaitingForSource { timeout: _ } => {
-                let mut should_start_interaction = false;
+    let mut claimed_agents: HashSet<Entity> = HashSet::new();
 
-                if let Ok(source_position) = agent_query.get(interaction.source) {
-                    if let Ok(target_position) = agent_query.get(interaction.target) {
-                        if source_position.is_adjacent(target_position) {
-                            should_start_interaction = true;
-                        } else {
-                            // info!(
-                            //     "TargetWaitingForSource: source not close enough. Target: {}. Source: {}.",
-                            //     interaction.target, interaction.source
-                            // );
-                        }
-                    }
-                }
-
-                if should_start_interaction {
-                    custom_debug(
-                        interaction_entity,
-                        "activate_pending_interactions",
-                        format!(
-                            "Interaction {} between {} and {} is activating",
-                            interaction_entity, interaction.source, interaction.target
-                        ),
-                    );
-
-                    let active_interaction = ActivelyInteracting(interaction_entity);
-                    // let (source_label, target_label) = interaction.get_kind_labels();
-
-                    commands
-                        .entity(interaction.source)
-                        .remove::<(WaitingAsSource, GetCloseToEntity)>()
-                        .insert(active_interaction.clone());
-
-                    commands
-                        .entity(interaction.target)
-                        .remove::<WaitingAsTarget>()
-                        .insert(active_interaction);
-
-                    *interaction_state = InteractionState::Active {
-                        duration: Timer::from_seconds(5., TimerMode::Once),
-                    };
-                }
+    // Collect and sort interactions to ensure deterministic tie-breaking.
+    let mut sorted_interactions: Vec<(Entity, Interaction, Mut<InteractionState>)> = query
+        .iter_mut()
+        .filter_map(|(entity, interaction, state)| {
+            if let InteractionState::TargetWaitingForSource { .. } = *state {
+                Some((entity, interaction.clone(), state))
+            } else {
+                None
             }
-            _ => {}
+        })
+        .collect();
+
+    sorted_interactions.sort_by_key(|(entity, _, _)| entity.index());
+
+    for (interaction_entity, interaction, mut interaction_state) in sorted_interactions {
+        // Check if agents are already claimed in this run
+        if claimed_agents.contains(&interaction.source)
+            || claimed_agents.contains(&interaction.target)
+        {
+            continue;
+        }
+
+        // Check if agents are available and adjacent
+        if let (Ok(source_position), Ok(target_position)) = (
+            agent_query.get(interaction.source),
+            agent_query.get(interaction.target),
+        ) {
+            if source_position.is_adjacent(target_position) {
+                // This interaction wins the tie-break due to sorted processing.
+                // Claim agents and activate.
+                claimed_agents.insert(interaction.source);
+                claimed_agents.insert(interaction.target);
+
+                custom_debug(
+                    interaction_entity,
+                    "activate_pending_interactions",
+                    format!(
+                        "Interaction {} between {} and {} is activating",
+                        interaction_entity, interaction.source, interaction.target
+                    ),
+                );
+
+                let active_interaction = ActivelyInteracting(interaction_entity);
+
+                commands
+                    .entity(interaction.source)
+                    .remove::<(WaitingAsSource, GetCloseToEntity)>()
+                    .insert(active_interaction.clone());
+
+                commands
+                    .entity(interaction.target)
+                    .remove::<WaitingAsTarget>()
+                    .insert(active_interaction);
+
+                *interaction_state = InteractionState::Active {
+                    duration: Timer::from_seconds(5., TimerMode::Once),
+                };
+            }
         }
     }
 }
