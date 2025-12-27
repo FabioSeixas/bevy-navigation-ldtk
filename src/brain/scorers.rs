@@ -4,7 +4,8 @@ use rand::Rng;
 
 use crate::{
     agent::Agent,
-    interaction::{ActivelyInteracting, WaitingAsSource, WaitingAsTarget},
+    brain::components::ActiveRelaxTask,
+    interaction::{ActivelyInteracting, WaitingAsSource, WaitingAsTarget}, log::custom_debug,
 };
 
 #[derive(Clone, Component, Debug, ScorerBuilder)]
@@ -35,7 +36,7 @@ pub struct RelaxScorer;
 
 pub fn relax_scorer_system(
     agent_q: Query<
-        Entity,
+        (Entity, Option<&ActiveRelaxTask>),
         (
             With<Agent>,
             Without<WaitingAsSource>,
@@ -46,10 +47,16 @@ pub fn relax_scorer_system(
     mut query: Query<(&Actor, &mut Score, &ScorerSpan), With<RelaxScorer>>,
 ) {
     for (Actor(actor), mut score, _span) in &mut query {
-        if let Ok(_) = agent_q.get(*actor) {
-            score.set(get_probability(0.5));
-        } else {
-            score.set(0.);
+        if let Ok((_, relaxing)) = agent_q.get(*actor) {
+            if relaxing.is_some() {
+                score.set(1.0);
+            } else {
+                let prob = get_probability(0.5);
+
+                // custom_debug(*actor, "relax_scorer_system", format!("prob: {}", prob));
+
+                score.set(prob);
+            }
         }
     }
 }

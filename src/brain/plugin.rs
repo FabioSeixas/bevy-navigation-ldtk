@@ -3,7 +3,7 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
-    brain::{interrupt::*, scorers::*},
+    brain::{cleanup::*, interrupt::*, relax::*, scorers::*},
     consume::ConsumeAction,
     interaction::{HandleAnyInteractionAction, TalkAction},
     walk::components::WalkingAction,
@@ -29,8 +29,14 @@ impl Plugin for BrainPlugin {
             )
             .add_systems(
                 Update,
-                (attach_main_thinker_to_agents, interrupt_action_system),
-            );
+                (
+                    start_action_system,
+                    finish_action_system,
+                    interrupt_action_system,
+                )
+                    .in_set(BigBrainSet::Actions),
+            )
+            .add_systems(Last, attach_main_thinker_to_agents);
     }
 }
 
@@ -46,18 +52,38 @@ fn attach_main_thinker_to_agents(
                 // P1: Highest priority interrupt.
                 .when(InterruptCurrentTaskScorer, InterruptCurrentTaskAction)
                 // P2: Handle any ongoing interaction state.
-                .when(HandleAnyInteractionScorer, HandleAnyInteractionAction)
+                .when(
+                    HandleAnyInteractionScorer,
+                    Steps::build()
+                        .label("HandleAnyInteraction")
+                        .step(StartAction::empty("HandleAnyInteraction"))
+                        .step(HandleAnyInteractionAction),
+                )
                 // P3: Lowest priority general behaviors.
                 .picker(Highest)
                 .when(
                     HungryScorer,
                     Steps::build()
                         .label("Hungry")
+                        .step(StartAction::empty("Hungry"))
                         .step(WalkingAction::destination(hungry_location.clone()))
                         .step(ConsumeAction::new()),
                 )
-                // .when(RelaxScorer, WalkingAction::random_destination()),
-                .when(TalkScorer, TalkAction)
+                .when(
+                    RelaxScorer,
+                    Steps::build()
+                        .label("Relax")
+                        .step(get_start_relax_action())
+                        .step(WalkingAction::random_destination())
+                        .step(FinishAction),
+                )
+                .when(
+                    TalkScorer,
+                    Steps::build()
+                        .label("Talk")
+                        .step(StartAction::empty("Talk"))
+                        .step(TalkAction),
+                ),
         );
     }
 }
