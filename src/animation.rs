@@ -1,6 +1,6 @@
 use bevy::{math::UVec2, prelude::*};
 
-use crate::{events::FaceToFaceEvent, world::components::GridPosition};
+use crate::{events::FaceToFaceEvent, walk::components::Walking, world::components::GridPosition};
 
 #[derive(Component, Clone, Copy)]
 pub struct Animation {
@@ -140,7 +140,7 @@ fn update_animation_direction(
 
 fn animate_sprite_system(
     time: Res<Time>,
-    mut query: Query<(&Animation, &mut AnimationTimer, &mut Sprite)>,
+    mut query: Query<(&Animation, &mut AnimationTimer, &mut Sprite), With<Walking>>,
 ) {
     for (animation, mut timer, mut sprite) in query.iter_mut() {
         timer.tick(time.delta());

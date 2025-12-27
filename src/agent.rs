@@ -413,7 +413,9 @@ fn movement_agent(
                 let mut target_point =
                     Grid::grid_to_world(pathfinding_position.x, pathfinding_position.y);
 
-                target_point.z = AGENT_Z_VALUE;
+                // AGENT_Z_VALUE = base Z value
+                // AGENT_Z_SCALE = adjust based on current Y value
+                target_point.z = AGENT_Z_VALUE + (-target_point.y * AGENT_Z_SCALE);
 
                 let to_target = target_point - current_point;
                 let distance = to_target.length();
