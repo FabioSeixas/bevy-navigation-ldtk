@@ -39,7 +39,14 @@ impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_animations)
             .add_observer(turn_agents_to_face_each_other_system)
-            .add_systems(Update, (animate_sprite_system, update_animation_direction));
+            .add_systems(
+                Update,
+                (
+                    animate_sprite_walking_system,
+                    update_animation_direction,
+                    animate_sprite_stationary_system,
+                ),
+            );
     }
 }
 
@@ -70,6 +77,10 @@ fn setup_animations(
         },
     });
 }
+
+// x, y
+// 1, 1 (a)
+// 2, 1 (b)
 
 fn turn_agents_to_face_each_other_system(
     event: On<FaceToFaceEvent>,
@@ -138,7 +149,7 @@ fn update_animation_direction(
     }
 }
 
-fn animate_sprite_system(
+fn animate_sprite_walking_system(
     time: Res<Time>,
     mut query: Query<(&Animation, &mut AnimationTimer, &mut Sprite), With<Walking>>,
 ) {
@@ -152,6 +163,14 @@ fn animate_sprite_system(
                     atlas.index + 1
                 };
             }
+        }
+    }
+}
+
+fn animate_sprite_stationary_system(mut query: Query<(&Animation, &mut Sprite), Without<Walking>>) {
+    for (animation, mut sprite) in query.iter_mut() {
+        if let Some(atlas) = &mut sprite.texture_atlas {
+            atlas.index = animation.first;
         }
     }
 }
