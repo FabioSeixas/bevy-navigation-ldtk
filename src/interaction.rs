@@ -5,6 +5,7 @@ use big_brain::prelude::*;
 
 use crate::{
     agent::Agent,
+    events::FaceToFaceEvent,
     interaction_queue::{AgentInteractionItem, AgentInteractionQueue},
     log::custom_debug,
     walk::components::GetCloseToEntity,
@@ -471,6 +472,12 @@ fn activate_pending_interactions(
                         interaction_entity, interaction.source, interaction.target
                     ),
                 );
+
+                // Trigger event to make agents face each other
+                commands.trigger(FaceToFaceEvent {
+                    agent_a: interaction.source,
+                    agent_b: interaction.target,
+                });
 
                 let active_interaction = ActivelyInteracting(interaction_entity);
 

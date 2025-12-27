@@ -1,5 +1,7 @@
 use bevy::{math::UVec2, prelude::*};
 
+use crate::{events::FaceToFaceEvent, world::components::GridPosition};
+
 #[derive(Component, Clone, Copy)]
 pub struct Animation {
     pub first: usize,
@@ -36,6 +38,7 @@ pub struct AnimationPlugin;
 impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_animations)
+            .add_observer(turn_agents_to_face_each_other_system)
             .add_systems(Update, (animate_sprite_system, update_animation_direction));
     }
 }
@@ -68,6 +71,47 @@ fn setup_animations(
     });
 }
 
+fn turn_agents_to_face_each_other_system(
+    event: On<FaceToFaceEvent>,
+    mut commands: Commands,
+    agent_q: Query<&GridPosition>,
+) {
+    if let (Ok(pos_a), Ok(pos_b)) = (agent_q.get(event.agent_a), agent_q.get(event.agent_b)) {
+        let dx = pos_a.x - pos_b.x;
+        let dy = pos_a.y - pos_b.y;
+
+        if dx > 0 {
+            commands
+                .entity(event.agent_a)
+                .insert(AnimationDirection::Left);
+            commands
+                .entity(event.agent_b)
+                .insert(AnimationDirection::Right);
+        } else if dx < 0 {
+            commands
+                .entity(event.agent_a)
+                .insert(AnimationDirection::Right);
+            commands
+                .entity(event.agent_b)
+                .insert(AnimationDirection::Left);
+        } else if dy > 0 {
+            commands
+                .entity(event.agent_a)
+                .insert(AnimationDirection::Down);
+            commands
+                .entity(event.agent_b)
+                .insert(AnimationDirection::Up);
+        } else if dy < 0 {
+            commands
+                .entity(event.agent_a)
+                .insert(AnimationDirection::Up);
+            commands
+                .entity(event.agent_b)
+                .insert(AnimationDirection::Down);
+        }
+    }
+}
+
 fn update_animation_direction(
     mut query: Query<(&mut Animation, &AnimationDirection), Changed<AnimationDirection>>,
     animations: Res<CharacterAnimations>,
@@ -96,9 +140,9 @@ fn update_animation_direction(
 
 fn animate_sprite_system(
     time: Res<Time>,
-    query: Query<(&Animation, &mut AnimationTimer, &mut Sprite)>,
+    mut query: Query<(&Animation, &mut AnimationTimer, &mut Sprite)>,
 ) {
-    for (animation, mut timer, mut sprite) in query {
+    for (animation, mut timer, mut sprite) in query.iter_mut() {
         timer.tick(time.delta());
         if timer.just_finished() {
             if let Some(atlas) = &mut sprite.texture_atlas {
